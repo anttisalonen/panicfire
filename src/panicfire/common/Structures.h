@@ -34,7 +34,7 @@ struct SoldierData {
 	Health health;
 };
 
-enum class Vegetation {
+enum class VegetationLevel {
 	None,
 	Tree1,
 	Tree2,
@@ -44,6 +44,8 @@ enum class Vegetation {
 };
 
 enum class GrassLevel {
+	Floor,
+	Path,
 	Low,
 	Medium,
 	High
@@ -51,20 +53,20 @@ enum class GrassLevel {
 
 struct MapFragment {
 	bool wall = false;
-	bool floor = false;
-	Vegetation vegetationlevel = Vegetation::None;
+	VegetationLevel vegetationlevel = VegetationLevel::None;
 	GrassLevel grasslevel = GrassLevel::Low;
 };
 
 class MapData {
 	public:
-		const MapFragment& getPoint(int x, int y) const;
-		int getWidth() const;
-		int getHeight() const;
+		void generate(unsigned int w, unsigned int h);
+		const MapFragment& getPoint(unsigned int x, unsigned int y) const;
+		unsigned int getWidth() const;
+		unsigned int getHeight() const;
 
 	private:
-		int width = 0;
-		int height = 0;
+		unsigned int width = 0;
+		unsigned int height = 0;
 		std::vector<MapFragment> data;
 };
 
@@ -127,9 +129,9 @@ struct DeniedQueryResult {
 typedef boost::variant<SoldierQueryResult, MapQueryResult, DeniedQueryResult> QueryResult;
 
 // interface
-class GameInterface {
+class WorldInterface {
 	public:
-		virtual ~GameInterface() { }
+		virtual ~WorldInterface() { }
 		virtual QueryResult query(const Query& q) = 0;
 		virtual bool input(const Input& i) = 0;
 		virtual Event pollEvents() = 0;

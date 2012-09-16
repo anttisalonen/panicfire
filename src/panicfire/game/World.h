@@ -5,16 +5,22 @@
 
 namespace PanicFire {
 
-class Game : public Common::GameInterface {
+namespace Game {
+
+class World : public Common::WorldInterface {
 
 	public:
-		Game();
+		World();
+
 		Common::QueryResult query(const Common::Query& q);
 		bool input(const Common::Input& i);
 		Common::Event pollEvents();
-		void run();
 
+	private:
+		Common::MapData mMapData;
 };
+
+}
 
 }
 

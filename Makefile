@@ -20,7 +20,7 @@ COMMONLIB = $(COMMONSRCDIR)/libcommon.a
 PANICFIREBINNAME = panicfire
 PANICFIREBIN     = $(BINDIR)/$(PANICFIREBINNAME)
 PANICFIRESRCDIR = src/panicfire
-PANICFIRESRCFILES = game/Game.cpp main.cpp
+PANICFIRESRCFILES = common/Structures.cpp game/World.cpp ui/Driver.cpp main.cpp
 
 PANICFIRESRCS = $(addprefix $(PANICFIRESRCDIR)/, $(PANICFIRESRCFILES))
 PANICFIREOBJS = $(PANICFIRESRCS:.cpp=.o)

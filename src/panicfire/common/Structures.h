@@ -58,7 +58,9 @@ struct MapFragment {
 
 class MapData {
 	public:
-		const MapFragment& getPoint(int x, int y);
+		const MapFragment& getPoint(int x, int y) const;
+		int getWidth() const;
+		int getHeight() const;
 
 	private:
 		int width = 0;
@@ -125,9 +127,9 @@ struct DeniedQueryResult {
 typedef boost::variant<SoldierQueryResult, MapQueryResult, DeniedQueryResult> QueryResult;
 
 // interface
-class Game {
+class GameInterface {
 	public:
-		virtual ~Game() { }
+		virtual ~GameInterface() { }
 		virtual QueryResult query(const Query& q) = 0;
 		virtual bool input(const Input& i) = 0;
 		virtual Event pollEvents() = 0;

@@ -9,13 +9,20 @@ namespace PanicFire {
 
 namespace Common {
 
+#define MAX_TEAM_SOLDIERS 8
+#define MAX_NUM_TEAMS 2
+
 struct SoldierID {
-	int id = 0;
+	unsigned int id = 0;
+};
+
+struct TeamID {
+	unsigned int id = 0;
 };
 
 struct Position {
-	int x = 0;
-	int y = 0;
+	unsigned int x = 0;
+	unsigned int y = 0;
 };
 
 struct MovementEvent {
@@ -25,13 +32,32 @@ struct MovementEvent {
 };
 
 struct Health {
-	int health = 0;
+	unsigned int health = 0;
+};
+
+enum class Direction {
+	E,
+	NE,
+	N,
+	NW,
+	W,
+	SW,
+	S,
+	SE
 };
 
 struct SoldierData {
 	SoldierID id;
+	TeamID teamid;
 	Position position;
 	Health health;
+	bool active = false;
+	Direction direction;
+};
+
+struct TeamData {
+	TeamID id;
+	SoldierID soldiers[MAX_TEAM_SOLDIERS];
 };
 
 enum class VegetationLevel {
@@ -112,7 +138,11 @@ struct SoldierQuery {
 struct MapQuery {
 };
 
-typedef boost::variant<SoldierQuery, MapQuery> Query;
+struct TeamQuery {
+	TeamID team;
+};
+
+typedef boost::variant<SoldierQuery, MapQuery, TeamQuery> Query;
 
 // query results
 struct SoldierQueryResult {
@@ -123,10 +153,17 @@ struct MapQueryResult {
 	MapData map;
 };
 
+struct TeamQueryResult {
+	TeamData team;
+};
+
+struct InvalidQueryResult {
+};
+
 struct DeniedQueryResult {
 };
 
-typedef boost::variant<SoldierQueryResult, MapQueryResult, DeniedQueryResult> QueryResult;
+typedef boost::variant<SoldierQueryResult, MapQueryResult, TeamQueryResult, InvalidQueryResult, DeniedQueryResult> QueryResult;
 
 // interface
 class WorldInterface {
@@ -135,6 +172,24 @@ class WorldInterface {
 		virtual QueryResult query(const Query& q) = 0;
 		virtual bool input(const Input& i) = 0;
 		virtual Event pollEvents() = 0;
+};
+
+class WorldData {
+	public:
+		WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers);
+
+		static TeamID teamIDFromSoldierID(SoldierID s);
+		TeamData* getTeam(TeamID t);
+		TeamData* getTeam(SoldierID t);
+		SoldierData* getSoldier(SoldierID s);
+		MapData* getMapData();
+
+	private:
+		static unsigned int teamIndexFromTeamID(TeamID s);
+		static unsigned int soldierIndexFromSoldierID(SoldierID s);
+		MapData mMapData;
+		TeamData mTeamData[MAX_NUM_TEAMS];
+		SoldierData mSoldierData[MAX_NUM_TEAMS * MAX_TEAM_SOLDIERS];
 };
 
 }

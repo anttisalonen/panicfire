@@ -43,6 +43,78 @@ unsigned int MapData::getHeight() const
 	return height;
 }
 
+WorldData::WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers)
+{
+	mMapData.generate(w, h);
+	nsoldiers = std::min(static_cast<unsigned int>(MAX_TEAM_SOLDIERS), nsoldiers);
+	unsigned int sid = 1;
+	for(unsigned int i = 0; i < MAX_NUM_TEAMS; i++) {
+		static_assert(MAX_NUM_TEAMS == 2, "currently only two teams are supported");
+		unsigned int tid = i + 1;
+		mTeamData[i].id.id = tid;
+		for(unsigned int j = 0; j < nsoldiers; j++) {
+			mSoldierData[j].id.id = sid;
+			mSoldierData[j].teamid.id = tid;
+			if(i == 0)
+				mSoldierData[j].position.x = j;
+			else
+				mSoldierData[j].position.x = w - j;
+			mSoldierData[j].position.y = i == 0 ? 0 : h - 1;;
+			mSoldierData[j].health.health = 100;
+			mSoldierData[j].active = true;
+			mSoldierData[j].direction = i == 0 ? Direction::SE : Direction::NW;
+			mTeamData[i].soldiers[j].id = sid;
+
+			sid++;
+		}
+	}
+}
+
+unsigned int WorldData::teamIndexFromTeamID(TeamID s)
+{
+	return s.id - 1;
+}
+
+unsigned int WorldData::soldierIndexFromSoldierID(SoldierID s)
+{
+	return s.id % MAX_TEAM_SOLDIERS - 1;
+}
+
+TeamID WorldData::teamIDFromSoldierID(SoldierID s)
+{
+	TeamID t;
+	t.id = (s.id - 1) / MAX_TEAM_SOLDIERS;
+	return t;
+}
+
+TeamData* WorldData::getTeam(TeamID t)
+{
+	unsigned int i = teamIndexFromTeamID(t);
+	if(i < MAX_NUM_TEAMS)
+		return &mTeamData[i];
+	else
+		return nullptr;
+}
+
+TeamData* WorldData::getTeam(SoldierID t)
+{
+	return getTeam(teamIDFromSoldierID(t));
+}
+
+SoldierData* WorldData::getSoldier(SoldierID s)
+{
+	unsigned int i = soldierIndexFromSoldierID(s);
+	if(i < MAX_TEAM_SOLDIERS)
+		return &mSoldierData[i];
+	else
+		return nullptr;
+}
+
+MapData* WorldData::getMapData()
+{
+	return &mMapData;
+}
+
 
 }
 

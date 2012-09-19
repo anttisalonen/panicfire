@@ -42,6 +42,8 @@ Driver::~Driver()
 
 bool Driver::init()
 {
+	bool cameraInit = false;
+
 	SDL_utils::setupOrthoScreen(getScreenWidth(), getScreenHeight());
 	{
 		Common::QueryResult qr = mWorld.query(Common::MapQuery());
@@ -50,6 +52,7 @@ bool Driver::init()
 			return false;
 		}
 	}
+
 	for(unsigned int i = 1; i <= MAX_NUM_TEAMS; i++) {
 		TeamID tid = TeamID(i);
 		Common::QueryResult qr = mWorld.query(Common::TeamQuery(tid));
@@ -68,6 +71,14 @@ bool Driver::init()
 				if(!boost::apply_visitor(mData, qr2)) {
 					std::cerr << "Soldier query failed for soldier " << sid.id << ".\n";
 					return false;
+				} else if(!cameraInit) {
+					if(td->id.id == 1) {
+						const SoldierData* sd = mData.getSoldier(sid);
+						assert(sd);
+						const Position& p = sd->position;
+						mCamera.x = p.x;
+						mCamera.y = p.y;
+					}
 				}
 			}
 		}

@@ -43,6 +43,10 @@ unsigned int MapData::getHeight() const
 	return height;
 }
 
+WorldData::WorldData()
+{
+}
+
 WorldData::WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers)
 {
 	mMapData.generate(w, h);
@@ -53,16 +57,16 @@ WorldData::WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers)
 		unsigned int tid = i + 1;
 		mTeamData[i].id.id = tid;
 		for(unsigned int j = 0; j < nsoldiers; j++) {
-			mSoldierData[j].id.id = sid;
-			mSoldierData[j].teamid.id = tid;
+			mSoldierData[sid - 1].id.id = sid;
+			mSoldierData[sid - 1].teamid.id = tid;
 			if(i == 0)
-				mSoldierData[j].position.x = j;
+				mSoldierData[sid - 1].position.x = j;
 			else
-				mSoldierData[j].position.x = w - j;
-			mSoldierData[j].position.y = i == 0 ? 0 : h - 1;;
-			mSoldierData[j].health.health = 100;
-			mSoldierData[j].active = true;
-			mSoldierData[j].direction = i == 0 ? Direction::SE : Direction::NW;
+				mSoldierData[sid - 1].position.x = w - j;
+			mSoldierData[sid - 1].position.y = i == 0 ? 0 : h - 1;;
+			mSoldierData[sid - 1].health.health = 100;
+			mSoldierData[sid - 1].active = true;
+			mSoldierData[sid - 1].direction = i == 0 ? Direction::SE : Direction::NW;
 			mTeamData[i].soldiers[j].id = sid;
 
 			sid++;
@@ -77,7 +81,7 @@ unsigned int WorldData::teamIndexFromTeamID(TeamID s)
 
 unsigned int WorldData::soldierIndexFromSoldierID(SoldierID s)
 {
-	return s.id % MAX_TEAM_SOLDIERS - 1;
+	return s.id - 1;
 }
 
 TeamID WorldData::teamIDFromSoldierID(SoldierID s)
@@ -90,7 +94,7 @@ TeamID WorldData::teamIDFromSoldierID(SoldierID s)
 TeamData* WorldData::getTeam(TeamID t)
 {
 	unsigned int i = teamIndexFromTeamID(t);
-	if(i < MAX_NUM_TEAMS)
+	if(i < mTeamData.size())
 		return &mTeamData[i];
 	else
 		return nullptr;
@@ -104,15 +108,61 @@ TeamData* WorldData::getTeam(SoldierID t)
 SoldierData* WorldData::getSoldier(SoldierID s)
 {
 	unsigned int i = soldierIndexFromSoldierID(s);
-	if(i < MAX_TEAM_SOLDIERS)
+	if(i < mSoldierData.size()) {
 		return &mSoldierData[i];
-	else
+	} else {
 		return nullptr;
+	}
 }
 
 MapData* WorldData::getMapData()
 {
 	return &mMapData;
+}
+
+bool WorldData::operator()(const Common::SoldierQueryResult& q)
+{
+	unsigned int index = soldierIndexFromSoldierID(q.soldier.id);
+	if(index >= mSoldierData.size()) {
+		std::cerr << "Soldier query failed (invalid data - ID: " << q.soldier.id.id << ").\n";
+		assert(0);
+		return false;
+	}
+	mSoldierData[index] = q.soldier;
+	std::cout << "Soldier query successful.\n";
+	return true;
+}
+
+bool WorldData::operator()(const Common::TeamQueryResult& q)
+{
+	unsigned int index = teamIndexFromTeamID(q.team.id);
+	if(index >= mTeamData.size()) {
+		assert(0);
+		std::cerr << "Team query failed (invalid data).\n";
+		return false;
+	}
+	mTeamData[index] = q.team;
+	std::cout << "Team query successful for team " << mTeamData[index].id.id << ".\n";
+	return true;
+}
+
+bool WorldData::operator()(const Common::MapQueryResult& q)
+{
+	std::cout << "Map query successful.\n";
+	mMapData = q.map;
+	return true;
+}
+
+bool WorldData::operator()(const Common::DeniedQueryResult& q)
+{
+	std::cerr << "WorldData error: denied query.\n";
+	return false;
+}
+
+bool WorldData::operator()(const Common::InvalidQueryResult& q)
+{
+	std::cerr << "WorldData error: invalid query.\n";
+	return false;
 }
 
 

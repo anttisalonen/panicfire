@@ -2,6 +2,7 @@
 #define PANICFIRE_COMMON_STRUCTURES_H
 
 #include <vector>
+#include <array>
 
 #include <boost/variant.hpp>
 
@@ -13,11 +14,13 @@ namespace Common {
 #define MAX_NUM_TEAMS 2
 
 struct SoldierID {
-	unsigned int id = 0;
+	SoldierID(unsigned int tid = 0) : id(tid) { }
+	unsigned int id;
 };
 
 struct TeamID {
-	unsigned int id = 0;
+	TeamID(unsigned int tid = 0) : id(tid) { }
+	unsigned int id;
 };
 
 struct Position {
@@ -132,6 +135,7 @@ typedef boost::variant<MovementInput, ShotInput, FinishTurnInput> Input;
 
 // queries
 struct SoldierQuery {
+	SoldierQuery(SoldierID tid) : soldier(tid) { }
 	SoldierID soldier;
 };
 
@@ -139,6 +143,7 @@ struct MapQuery {
 };
 
 struct TeamQuery {
+	TeamQuery(TeamID tid) : team(tid) { }
 	TeamID team;
 };
 
@@ -174,8 +179,9 @@ class WorldInterface {
 		virtual Event pollEvents() = 0;
 };
 
-class WorldData {
+class WorldData : public boost::static_visitor<bool> {
 	public:
+		WorldData();
 		WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers);
 
 		static TeamID teamIDFromSoldierID(SoldierID s);
@@ -184,12 +190,18 @@ class WorldData {
 		SoldierData* getSoldier(SoldierID s);
 		MapData* getMapData();
 
+		bool operator()(const Common::SoldierQueryResult& q);
+		bool operator()(const Common::TeamQueryResult& q);
+		bool operator()(const Common::MapQueryResult& q);
+		bool operator()(const Common::DeniedQueryResult& q);
+		bool operator()(const Common::InvalidQueryResult& q);
+
 	private:
 		static unsigned int teamIndexFromTeamID(TeamID s);
 		static unsigned int soldierIndexFromSoldierID(SoldierID s);
 		MapData mMapData;
-		TeamData mTeamData[MAX_NUM_TEAMS];
-		SoldierData mSoldierData[MAX_NUM_TEAMS * MAX_TEAM_SOLDIERS];
+		std::array<TeamData, MAX_NUM_TEAMS> mTeamData;
+		std::array<SoldierData, MAX_NUM_TEAMS * MAX_TEAM_SOLDIERS> mSoldierData;
 };
 
 }

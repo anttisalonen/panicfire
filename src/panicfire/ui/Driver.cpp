@@ -51,6 +51,8 @@ bool Driver::init()
 			std::cerr << "Map query failed.\n";
 			return false;
 		}
+		assert(mData.getMapData());
+		mAStar.setMapData(mData.getMapData());
 	}
 
 	for(unsigned int i = 1; i <= MAX_NUM_TEAMS; i++) {
@@ -142,6 +144,21 @@ void Driver::drawFrame()
 			drawVegetationTile(i, j, fr.vegetationlevel);
 		}
 	}
+
+	{
+		float htw = mTileWidth * 0.5f;
+		for(auto& p : mPathLine) {
+			Vector2 p1(tileToScreenCoord(p.first));
+			Vector2 p2(tileToScreenCoord(p.second));
+			SDL_utils::drawLine(Vector3(p1.x + htw,
+						p1.y + htw,
+						0.0f),
+					Vector3(p2.x + htw,
+					       p2.y + htw,
+					       0.0f),
+					Color::White, 1.0f);
+		}
+	}
 }
 
 bool Driver::handleKeyDown(float frameTime, SDLKey key)
@@ -152,6 +169,40 @@ bool Driver::handleKeyDown(float frameTime, SDLKey key)
 bool Driver::handleKeyUp(float frameTime, SDLKey key)
 {
 	return handleKey(frameTime, key, false);
+}
+
+bool Driver::handleMousePress(float frameTime, Uint8 button)
+{
+	if(button == SDL_BUTTON_LEFT) {
+		auto tgtpos = getMousePosition();
+		const MapData* map = mData.getMapData();
+		if(tgtpos.x < map->getWidth() &&
+				tgtpos.y < map->getHeight()) {
+			auto prevpos = Position(0, 0);
+			auto l = mAStar.solve(std::set<Position>(),
+					prevpos, tgtpos);
+			if(!l.empty()) {
+				mPathLine.clear();
+				for(auto& p : l) {
+					mPathLine.push_back({prevpos, p});
+					prevpos = p;
+				}
+			}
+		}
+	}
+	return false;
+}
+
+Common::Position Driver::getMousePosition() const
+{
+	int xp, yp;
+	float x, y;
+	SDL_GetMouseState(&xp, &yp);
+
+	x = xp / mTileWidth + mCamera.x - (getScreenWidth() / (2.0f * mTileWidth));
+	y = 1.0f + yp / mTileWidth + mCamera.y - (getScreenHeight() / (2.0f * mTileWidth));
+
+	return Position(x, y);
 }
 
 void Driver::drawGrassTile(unsigned int x, unsigned int y, GrassLevel l)
@@ -177,12 +228,18 @@ void Driver::drawVegetationTile(unsigned int x, unsigned int y, Common::Vegetati
 	return tex;
 }
 
+::Common::Vector2 Driver::tileToScreenCoord(const Common::Position& p)
+{
+	return Vector2(mTileWidth * (p.x - mCamera.x) + getScreenWidth() * 0.5f,
+			mTileWidth * (mCamera.y - p.y) + getScreenHeight() * 0.5f);
+}
+
 void Driver::drawTile(unsigned int x, unsigned int y,
 		const ::Common::Rectangle& texcoord,
 		const ::Common::Texture* t)
 {
-	SDL_utils::drawSprite(*t, Rectangle(mTileWidth * (x - mCamera.x) + getScreenWidth() * 0.5f,
-				mTileWidth * (mCamera.y - y) + getScreenHeight() * 0.5f,
+	auto s = tileToScreenCoord(Position(x, y));
+	SDL_utils::drawSprite(*t, Rectangle(s.x, s.y,
 				mTileWidth, mTileWidth), texcoord, 0.0f);
 }
 

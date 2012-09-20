@@ -1,6 +1,7 @@
 #ifndef PANICFIRE_COMMON_STRUCTURES_H
 #define PANICFIRE_COMMON_STRUCTURES_H
 
+#include <iostream>
 #include <vector>
 #include <array>
 
@@ -24,9 +25,38 @@ struct TeamID {
 };
 
 struct Position {
-	unsigned int x = 0;
-	unsigned int y = 0;
+	Position(unsigned int x_ = 0, unsigned int y_ = 0) : x(x_), y(y_) { } 
+	unsigned int x;
+	unsigned int y;
+	bool operator<(const Position& oth) const;
+	bool operator==(const Position& oth) const;
+	bool operator!=(const Position& oth) const;
 };
+
+inline std::ostream& operator<<(std::ostream& out, const Position& p)
+{
+	out << "(" << p.x << ", " << p.y << ")";
+	return out;
+}
+
+inline bool Position::operator<(const Position& oth) const
+{
+	if(x < oth.x)
+		return true;
+	if(x > oth.x)
+		return false;
+	return y < oth.y;
+}
+
+inline bool Position::operator==(const Position& oth) const
+{
+	return x == oth.x && y == oth.y;
+}
+
+inline bool Position::operator!=(const Position& oth) const
+{
+	return !(*this == oth);
+}
 
 struct MovementEvent {
 	SoldierID soldier;
@@ -92,6 +122,7 @@ class MapData {
 		const MapFragment& getPoint(unsigned int x, unsigned int y) const;
 		unsigned int getWidth() const;
 		unsigned int getHeight() const;
+		static unsigned int movementCost(GrassLevel g);
 
 	private:
 		unsigned int width = 0;

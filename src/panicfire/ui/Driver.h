@@ -10,6 +10,8 @@
 
 #include "panicfire/common/Structures.h"
 
+#include "panicfire/ui/AStar.h"
+
 namespace PanicFire {
 
 namespace UI {
@@ -27,6 +29,7 @@ class Driver : public ::Common::Driver {
 		void drawFrame() override;
 		bool handleKeyDown(float frameTime, SDLKey key) override;
 		bool handleKeyUp(float frameTime, SDLKey key) override;
+		bool handleMousePress(float frameTime, Uint8 button) override;
 
 	private:
 		void drawGrassTile(unsigned int x, unsigned int y, Common::GrassLevel l);
@@ -39,6 +42,8 @@ class Driver : public ::Common::Driver {
 				const ::Common::Texture* t);
 		bool handleKey(float frameTime, SDLKey key, bool pressed);
 		::Common::Color mapSideColor(bool first, const ::Common::Color& c);
+		::Common::Vector2 tileToScreenCoord(const Common::Position& p);
+		Common::Position getMousePosition() const;
 
 		Common::WorldInterface& mWorld;
 		Common::WorldData mData;
@@ -50,6 +55,8 @@ class Driver : public ::Common::Driver {
 		::Common::Texture* mGrassTexture;
 		::Common::Texture* mVegetationTexture;
 		std::array< ::Common::Texture*, 2> mSoldierTextures;
+		AStar mAStar;
+		std::list<std::pair<Common::Position, Common::Position>> mPathLine;
 };
 
 }

@@ -43,6 +43,23 @@ unsigned int MapData::getHeight() const
 	return height;
 }
 
+unsigned int MapData::movementCost(GrassLevel g)
+{
+	switch(g) {
+		case GrassLevel::Floor:
+		case GrassLevel::Path:
+			return 2;
+		case GrassLevel::Low:
+			return 3;
+		case GrassLevel::Medium:
+			return 4;
+		case GrassLevel::High:
+			return 5;
+	}
+	assert(0);
+	throw std::runtime_error("MapData::movementCost: unreachable");
+}
+
 WorldData::WorldData()
 {
 }

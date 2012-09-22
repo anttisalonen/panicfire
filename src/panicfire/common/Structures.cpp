@@ -89,6 +89,7 @@ WorldData::WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers)
 			sid++;
 		}
 	}
+	mCurrentSoldierID = 1;
 }
 
 unsigned int WorldData::teamIndexFromTeamID(TeamID s)
@@ -137,6 +138,55 @@ MapData* WorldData::getMapData()
 	return &mMapData;
 }
 
+SoldierData* WorldData::getCurrentSoldier()
+{
+	return getSoldier(mCurrentSoldierID);
+}
+
+const TeamData* WorldData::getTeam(TeamID t) const
+{
+	unsigned int i = teamIndexFromTeamID(t);
+	if(i < mTeamData.size())
+		return &mTeamData[i];
+	else
+		return nullptr;
+}
+
+const TeamData* WorldData::getTeam(SoldierID t) const
+{
+	return getTeam(teamIDFromSoldierID(t));
+}
+
+const SoldierData* WorldData::getSoldier(SoldierID s) const
+{
+	unsigned int i = soldierIndexFromSoldierID(s);
+	if(i < mSoldierData.size()) {
+		return &mSoldierData[i];
+	} else {
+		return nullptr;
+	}
+}
+
+const MapData* WorldData::getMapData() const
+{
+	return &mMapData;
+}
+
+const SoldierData* WorldData::getCurrentSoldier() const
+{
+	return getSoldier(mCurrentSoldierID);
+}
+
+SoldierID WorldData::getCurrentSoldierID() const
+{
+	return mCurrentSoldierID;
+}
+
+void WorldData::setCurrentSoldierID(SoldierID i)
+{
+	mCurrentSoldierID = i;
+}
+
 bool WorldData::operator()(const Common::SoldierQueryResult& q)
 {
 	unsigned int index = soldierIndexFromSoldierID(q.soldier.id);
@@ -170,6 +220,13 @@ bool WorldData::operator()(const Common::MapQueryResult& q)
 	return true;
 }
 
+bool WorldData::operator()(const Common::CurrentSoldierQueryResult& q)
+{
+	std::cout << "Current soldier query successful.\n";
+	mCurrentSoldierID = q.soldier;
+	return true;
+}
+
 bool WorldData::operator()(const Common::DeniedQueryResult& q)
 {
 	std::cerr << "WorldData error: denied query.\n";
@@ -182,6 +239,47 @@ bool WorldData::operator()(const Common::InvalidQueryResult& q)
 	return false;
 }
 
+bool WorldData::operator()(const Common::MovementEvent& ev)
+{
+	auto sd = getSoldier(ev.soldier);
+	assert(sd);
+	sd->position = ev.to;
+	return false;
+}
+
+bool WorldData::operator()(const Common::SightingEvent& ev)
+{
+	return false;
+}
+
+bool WorldData::operator()(const Common::ShotEvent& ev)
+{
+	return false;
+}
+
+bool WorldData::operator()(const Common::EmptyEvent& ev)
+{
+	return true;
+}
+
+bool WorldData::movementAllowed(const MovementInput& i) const
+{
+	auto sd = getSoldier(i.mover);
+	if(!sd) {
+		return false;
+	}
+
+	if(i.mover != mCurrentSoldierID) {
+		return false;
+	}
+
+	if(sd->position == i.to) {
+		return false;
+	}
+
+	return abs(sd->position.x - i.to.x) <= 1 &&
+			abs(sd->position.y - i.to.y) <= 1;
+}
 
 }
 

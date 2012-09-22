@@ -17,12 +17,36 @@ namespace Common {
 struct SoldierID {
 	SoldierID(unsigned int tid = 0) : id(tid) { }
 	unsigned int id;
+	bool operator==(const SoldierID& oth) const;
+	bool operator!=(const SoldierID& oth) const;
 };
+
+inline bool SoldierID::operator==(const SoldierID& oth) const
+{
+	return id == oth.id;
+}
+
+inline bool SoldierID::operator!=(const SoldierID& oth) const
+{
+	return !(*this == oth);
+}
 
 struct TeamID {
 	TeamID(unsigned int tid = 0) : id(tid) { }
 	unsigned int id;
+	bool operator==(const TeamID& oth) const;
+	bool operator!=(const TeamID& oth) const;
 };
+
+inline bool TeamID::operator==(const TeamID& oth) const
+{
+	return id == oth.id;
+}
+
+inline bool TeamID::operator!=(const TeamID& oth) const
+{
+	return !(*this == oth);
+}
 
 struct Position {
 	Position(unsigned int x_ = 0, unsigned int y_ = 0) : x(x_), y(y_) { } 
@@ -59,6 +83,8 @@ inline bool Position::operator!=(const Position& oth) const
 }
 
 struct MovementEvent {
+	MovementEvent(SoldierID s, const Position& f, const Position& t)
+		: soldier(s), from(f), to(t) { }
 	SoldierID soldier;
 	Position from;
 	Position to;
@@ -150,6 +176,7 @@ typedef boost::variant<MovementEvent, SightingEvent, ShotEvent, EmptyEvent> Even
 
 // input
 struct MovementInput {
+	MovementInput(SoldierID i, const Position& p) : mover(i), to(p) { }
 	SoldierID mover;
 	Position to;
 };
@@ -178,7 +205,10 @@ struct TeamQuery {
 	TeamID team;
 };
 
-typedef boost::variant<SoldierQuery, MapQuery, TeamQuery> Query;
+struct CurrentSoldierQuery {
+};
+
+typedef boost::variant<SoldierQuery, MapQuery, TeamQuery, CurrentSoldierQuery> Query;
 
 // query results
 struct SoldierQueryResult {
@@ -193,13 +223,18 @@ struct TeamQueryResult {
 	TeamData team;
 };
 
+struct CurrentSoldierQueryResult {
+	SoldierID soldier;
+};
+
 struct InvalidQueryResult {
 };
 
 struct DeniedQueryResult {
 };
 
-typedef boost::variant<SoldierQueryResult, MapQueryResult, TeamQueryResult, InvalidQueryResult, DeniedQueryResult> QueryResult;
+typedef boost::variant<SoldierQueryResult, MapQueryResult, TeamQueryResult,
+	CurrentSoldierQueryResult, InvalidQueryResult, DeniedQueryResult> QueryResult;
 
 // interface
 class WorldInterface {
@@ -216,23 +251,43 @@ class WorldData : public boost::static_visitor<bool> {
 		WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers);
 
 		static TeamID teamIDFromSoldierID(SoldierID s);
+
 		TeamData* getTeam(TeamID t);
 		TeamData* getTeam(SoldierID t);
 		SoldierData* getSoldier(SoldierID s);
 		MapData* getMapData();
+		SoldierData* getCurrentSoldier();
+
+		const TeamData* getTeam(TeamID t) const;
+		const TeamData* getTeam(SoldierID t) const;
+		const SoldierData* getSoldier(SoldierID s) const;
+		const MapData* getMapData() const;
+		const SoldierData* getCurrentSoldier() const;
+
+		SoldierID getCurrentSoldierID() const;
+		void setCurrentSoldierID(SoldierID i);
+		bool movementAllowed(const MovementInput& i) const;
 
 		bool operator()(const Common::SoldierQueryResult& q);
 		bool operator()(const Common::TeamQueryResult& q);
 		bool operator()(const Common::MapQueryResult& q);
+		bool operator()(const Common::CurrentSoldierQueryResult& q);
 		bool operator()(const Common::DeniedQueryResult& q);
 		bool operator()(const Common::InvalidQueryResult& q);
 
-	private:
+		bool operator()(const Common::MovementEvent& ev);
+		bool operator()(const Common::SightingEvent& ev);
+		bool operator()(const Common::ShotEvent& ev);
+		bool operator()(const Common::EmptyEvent& ev);
+
 		static unsigned int teamIndexFromTeamID(TeamID s);
 		static unsigned int soldierIndexFromSoldierID(SoldierID s);
+
+	private:
 		MapData mMapData;
 		std::array<TeamData, MAX_NUM_TEAMS> mTeamData;
 		std::array<SoldierData, MAX_NUM_TEAMS * MAX_TEAM_SOLDIERS> mSoldierData;
+		SoldierID mCurrentSoldierID;
 };
 
 }

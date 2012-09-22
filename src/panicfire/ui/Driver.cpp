@@ -17,7 +17,9 @@ Driver::Driver(Common::WorldInterface& w)
 	: ::Common::Driver(800, 600, "Panic Fire"),
 	mWorld(w),
 	mCameraZoom(10.0f),
-	mCameraZoomVelocity(0.0f)
+	mCameraZoomVelocity(0.0f),
+	mMyTeamID(TeamID(1)),
+	mMoving(false)
 {
 	mCamera.x = mCameraZoom;
 	mCamera.y = mCameraZoom;
@@ -42,8 +44,6 @@ Driver::~Driver()
 
 bool Driver::init()
 {
-	bool cameraInit = false;
-
 	SDL_utils::setupOrthoScreen(getScreenWidth(), getScreenHeight());
 	{
 		Common::QueryResult qr = mWorld.query(Common::MapQuery());
@@ -73,18 +73,26 @@ bool Driver::init()
 				if(!boost::apply_visitor(mData, qr2)) {
 					std::cerr << "Soldier query failed for soldier " << sid.id << ".\n";
 					return false;
-				} else if(!cameraInit) {
-					if(td->id.id == 1) {
-						const SoldierData* sd = mData.getSoldier(sid);
-						assert(sd);
-						const Position& p = sd->position;
-						mCamera.x = p.x;
-						mCamera.y = p.y;
-					}
 				}
 			}
 		}
 	}
+
+	{
+		Common::QueryResult qr = mWorld.query(Common::CurrentSoldierQuery());
+		if(!boost::apply_visitor(mData, qr)) {
+			std::cerr << "Current soldier query failed.\n";
+			return false;
+		}
+
+		const SoldierData* sd = mData.getCurrentSoldier();
+		if(sd) {
+			const Position& p = sd->position;
+			mCamera.x = p.x;
+			mCamera.y = p.y;
+		}
+	}
+
 	return true;
 }
 
@@ -93,7 +101,68 @@ bool Driver::prerenderUpdate(float frameTime)
 	mCamera += mCameraVelocity * frameTime;
 	mCameraZoom += mCameraZoomVelocity * frameTime;
 	mTileWidth = std::max(getScreenWidth(), getScreenHeight()) / (mCameraZoom * 2.0f);
+
+	handleEvents();
+	sendInput();
+
 	return false;
+}
+
+void Driver::sendInput()
+{
+	if(!mPathLine.empty() && !mMoving) {
+		auto sd = mData.getCurrentSoldier();
+		assert(sd);
+		for(auto pit = mPathLine.begin(); pit != mPathLine.end(); ) {
+			if(sd->position == *pit) {
+				pit = mPathLine.erase(pit);
+			} else {
+				MovementInput i(mData.getCurrentSoldierID(), *pit);
+				assert(mData.movementAllowed(i));
+				bool succ = mWorld.input(i);
+				assert(succ);
+				if(succ) {
+					mMoving = true;
+					mMovementPosition = *pit;
+					mCommandedSoldierID = sd->id;
+				}
+				break;
+			}
+		}
+	}
+}
+
+void Driver::handleEvents()
+{
+	while(1) {
+		auto ev = mWorld.pollEvents();
+		bool empty = boost::apply_visitor(mData, ev);
+		if(empty)
+			break;
+		boost::apply_visitor(*this, ev);
+	}
+}
+
+void Driver::operator()(const Common::MovementEvent& ev)
+{
+	if(mMoving && ev.soldier == mCommandedSoldierID && ev.to == mMovementPosition) {
+		mMoving = false;
+	}
+}
+
+void Driver::operator()(const Common::SightingEvent& ev)
+{
+	std::cout << "Sighting!\n";
+}
+
+void Driver::operator()(const Common::ShotEvent& ev)
+{
+	std::cout << "Shot!\n";
+}
+
+void Driver::operator()(const Common::EmptyEvent& ev)
+{
+	assert(0);
 }
 
 void Driver::drawFrame()
@@ -147,16 +216,20 @@ void Driver::drawFrame()
 
 	{
 		float htw = mTileWidth * 0.5f;
+		Position opos(UINT_MAX, 0);
 		for(auto& p : mPathLine) {
-			Vector2 p1(tileToScreenCoord(p.first));
-			Vector2 p2(tileToScreenCoord(p.second));
-			SDL_utils::drawLine(Vector3(p1.x + htw,
-						p1.y + htw,
-						0.0f),
-					Vector3(p2.x + htw,
-					       p2.y + htw,
-					       0.0f),
-					Color::White, 1.0f);
+			if(opos.x != UINT_MAX) {
+				Vector2 p1(tileToScreenCoord(opos));
+				Vector2 p2(tileToScreenCoord(p));
+				SDL_utils::drawLine(Vector3(p1.x + htw,
+							p1.y + htw,
+							0.0f),
+						Vector3(p2.x + htw,
+							p2.y + htw,
+							0.0f),
+						Color::White, 1.0f);
+			}
+			opos = p;
 		}
 	}
 }
@@ -178,14 +251,16 @@ bool Driver::handleMousePress(float frameTime, Uint8 button)
 		const MapData* map = mData.getMapData();
 		if(tgtpos.x < map->getWidth() &&
 				tgtpos.y < map->getHeight()) {
-			auto prevpos = Position(0, 0);
-			auto l = mAStar.solve(std::set<Position>(),
-					prevpos, tgtpos);
-			if(!l.empty()) {
-				mPathLine.clear();
-				for(auto& p : l) {
-					mPathLine.push_back({prevpos, p});
-					prevpos = p;
+			auto sd = mData.getCurrentSoldier();
+			if(sd) {
+				auto prevpos = sd->position;
+				auto l = mAStar.solve(std::set<Position>(),
+						prevpos, tgtpos);
+				if(!l.empty()) {
+					mPathLine.clear();
+					for(auto& p : l) {
+						mPathLine.push_back(p);
+					}
 				}
 			}
 		}

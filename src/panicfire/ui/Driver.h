@@ -18,10 +18,14 @@ namespace UI {
 
 class Driver;
 
-class Driver : public ::Common::Driver {
+class Driver : public ::Common::Driver, public boost::static_visitor<> {
 	public:
 		Driver(Common::WorldInterface& w);
 		~Driver();
+		void operator()(const Common::MovementEvent& ev);
+		void operator()(const Common::SightingEvent& ev);
+		void operator()(const Common::ShotEvent& ev);
+		void operator()(const Common::EmptyEvent& ev);
 
 	protected:
 		bool init() override;
@@ -44,6 +48,8 @@ class Driver : public ::Common::Driver {
 		::Common::Color mapSideColor(bool first, const ::Common::Color& c);
 		::Common::Vector2 tileToScreenCoord(const Common::Position& p);
 		Common::Position getMousePosition() const;
+		void sendInput();
+		void handleEvents();
 
 		Common::WorldInterface& mWorld;
 		Common::WorldData mData;
@@ -56,7 +62,11 @@ class Driver : public ::Common::Driver {
 		::Common::Texture* mVegetationTexture;
 		std::array< ::Common::Texture*, 2> mSoldierTextures;
 		AStar mAStar;
-		std::list<std::pair<Common::Position, Common::Position>> mPathLine;
+		std::list<Common::Position> mPathLine;
+		Common::TeamID mMyTeamID;
+		bool mMoving;
+		Common::Position mMovementPosition;
+		Common::SoldierID mCommandedSoldierID;
 };
 
 }

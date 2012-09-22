@@ -88,15 +88,11 @@ Common::QueryResult World::operator()(const Common::MovementInput& i)
 		return DeniedQueryResult();
 	}
 
-	auto oldpos = mData->getSoldier(i.mover)->position;
-	auto newpos = i.to;
-
-	auto e = MovementEvent(i.mover, oldpos, newpos);
-	bool empty = (*mData)(e);
+	bool empty = (*mData)(i);
 	assert(!empty);
 
 	for(auto& q : mEventQueue) {
-		q.push(e);
+		q.push(InputEvent(i));
 	}
 	return InvalidQueryResult();
 }

@@ -86,7 +86,7 @@ void AStar::maybeInsert(std::set<Common::Position>& s, const std::set<Common::Po
 
 int AStar::costFunc(const Common::Position& a, const Common::Position& b) const
 {
-	return Common::MapData::movementCost(mMapData->getPoint(b.x, b.y).grasslevel);
+	return mMapData->movementCost(b);
 }
 
 int AStar::heurFunc(const Common::Position& from, const Common::Position& to) const

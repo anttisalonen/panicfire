@@ -118,13 +118,14 @@ void Driver::sendInput()
 				pit = mPathLine.erase(pit);
 			} else {
 				MovementInput i(mData.getCurrentSoldierID(), *pit);
-				assert(mData.movementAllowed(i));
-				bool succ = mWorld.input(i);
-				assert(succ);
-				if(succ) {
-					mMoving = true;
-					mMovementPosition = *pit;
-					mCommandedSoldierID = sd->id;
+				if(mData.movementAllowed(i)) {
+					bool succ = mWorld.input(i);
+					assert(succ);
+					if(succ) {
+						mMoving = true;
+						mMovementPosition = *pit;
+						mCommandedSoldierID = sd->id;
+					}
 				}
 				break;
 			}
@@ -143,11 +144,9 @@ void Driver::handleEvents()
 	}
 }
 
-void Driver::operator()(const Common::MovementEvent& ev)
+void Driver::operator()(const Common::InputEvent& ev)
 {
-	if(mMoving && ev.soldier == mCommandedSoldierID && ev.to == mMovementPosition) {
-		mMoving = false;
-	}
+	boost::apply_visitor(*this, ev.input);
 }
 
 void Driver::operator()(const Common::SightingEvent& ev)
@@ -155,14 +154,26 @@ void Driver::operator()(const Common::SightingEvent& ev)
 	std::cout << "Sighting!\n";
 }
 
-void Driver::operator()(const Common::ShotEvent& ev)
-{
-	std::cout << "Shot!\n";
-}
-
 void Driver::operator()(const Common::EmptyEvent& ev)
 {
 	assert(0);
+}
+
+void Driver::operator()(const Common::MovementInput& ev)
+{
+	if(mMoving &&
+			mData.teamIDFromSoldierID(ev.mover) == mMyTeamID &&
+			ev.mover == mCommandedSoldierID && ev.to == mMovementPosition) {
+		mMoving = false;
+	}
+}
+
+void Driver::operator()(const Common::ShotInput& ev)
+{
+}
+
+void Driver::operator()(const Common::FinishTurnInput& ev)
+{
 }
 
 void Driver::drawFrame()

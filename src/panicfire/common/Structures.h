@@ -82,16 +82,12 @@ inline bool Position::operator!=(const Position& oth) const
 	return !(*this == oth);
 }
 
-struct MovementEvent {
-	MovementEvent(SoldierID s, const Position& f, const Position& t)
-		: soldier(s), from(f), to(t) { }
-	SoldierID soldier;
-	Position from;
-	Position to;
-};
-
 struct Health {
 	unsigned int health = 0;
+};
+
+struct APs {
+	unsigned int aps = 0;
 };
 
 enum class Direction {
@@ -112,6 +108,7 @@ struct SoldierData {
 	Health health;
 	bool active = false;
 	Direction direction;
+	APs aps;
 };
 
 struct TeamData {
@@ -149,30 +146,13 @@ class MapData {
 		unsigned int getWidth() const;
 		unsigned int getHeight() const;
 		static unsigned int movementCost(GrassLevel g);
+		unsigned int movementCost(const Position& p) const;
 
 	private:
 		unsigned int width = 0;
 		unsigned int height = 0;
 		std::vector<MapFragment> data;
 };
-
-// events
-struct SightingEvent {
-	SoldierID seer;
-	SoldierID seen;
-};
-
-struct ShotEvent {
-	SoldierID shooter;
-	SoldierID hit;
-	Position from;
-	Position to;
-};
-
-struct EmptyEvent {
-};
-
-typedef boost::variant<MovementEvent, SightingEvent, ShotEvent, EmptyEvent> Event;
 
 // input
 struct MovementInput {
@@ -190,6 +170,22 @@ struct FinishTurnInput {
 };
 
 typedef boost::variant<MovementInput, ShotInput, FinishTurnInput> Input;
+
+// events
+struct SightingEvent {
+	SoldierID seer;
+	SoldierID seen;
+};
+
+struct EmptyEvent {
+};
+
+struct InputEvent {
+	InputEvent(const Input& i) : input(i) { }
+	Input input;
+};
+
+typedef boost::variant<InputEvent, SightingEvent, EmptyEvent> Event;
 
 // queries
 struct SoldierQuery {
@@ -275,10 +271,15 @@ class WorldData : public boost::static_visitor<bool> {
 		bool operator()(const Common::DeniedQueryResult& q);
 		bool operator()(const Common::InvalidQueryResult& q);
 
-		bool operator()(const Common::MovementEvent& ev);
+		// event handling - return true for EmptyEvent only
+		bool operator()(const Common::InputEvent& ev);
 		bool operator()(const Common::SightingEvent& ev);
-		bool operator()(const Common::ShotEvent& ev);
 		bool operator()(const Common::EmptyEvent& ev);
+
+		// input event handling
+		bool operator()(const Common::MovementInput& ev);
+		bool operator()(const Common::ShotInput& ev);
+		bool operator()(const Common::FinishTurnInput& ev);
 
 		static unsigned int teamIndexFromTeamID(TeamID s);
 		static unsigned int soldierIndexFromSoldierID(SoldierID s);

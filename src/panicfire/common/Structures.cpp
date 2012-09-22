@@ -4,6 +4,8 @@
 
 #include "panicfire/common/Structures.h"
 
+#define MAX_APS	25
+
 namespace PanicFire {
 
 namespace Common {
@@ -60,6 +62,12 @@ unsigned int MapData::movementCost(GrassLevel g)
 	throw std::runtime_error("MapData::movementCost: unreachable");
 }
 
+unsigned int MapData::movementCost(const Position& p) const
+{
+	auto f = getPoint(p.x, p.y);
+	return MapData::movementCost(f.grasslevel);
+}
+
 WorldData::WorldData()
 {
 }
@@ -84,6 +92,7 @@ WorldData::WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers)
 			mSoldierData[sid - 1].health.health = 100;
 			mSoldierData[sid - 1].active = true;
 			mSoldierData[sid - 1].direction = i == 0 ? Direction::SE : Direction::NW;
+			mSoldierData[sid - 1].aps.aps = MAX_APS;
 			mTeamData[i].soldiers[j].id = sid;
 
 			sid++;
@@ -106,6 +115,7 @@ TeamID WorldData::teamIDFromSoldierID(SoldierID s)
 {
 	TeamID t;
 	t.id = (s.id - 1) / MAX_TEAM_SOLDIERS;
+	t.id += 1;
 	return t;
 }
 
@@ -239,20 +249,33 @@ bool WorldData::operator()(const Common::InvalidQueryResult& q)
 	return false;
 }
 
-bool WorldData::operator()(const Common::MovementEvent& ev)
+bool WorldData::operator()(const Common::MovementInput& ev)
 {
-	auto sd = getSoldier(ev.soldier);
+	auto sd = getSoldier(ev.mover);
 	assert(sd);
+	assert(movementAllowed(ev));
 	sd->position = ev.to;
+	sd->aps.aps -= mMapData.movementCost(ev.to);
+	return false;
+}
+
+bool WorldData::operator()(const Common::ShotInput& ev)
+{
+	return false;
+}
+
+bool WorldData::operator()(const Common::FinishTurnInput& ev)
+{
+	return false;
+}
+
+bool WorldData::operator()(const Common::InputEvent& ev)
+{
+	boost::apply_visitor(*this, ev.input);
 	return false;
 }
 
 bool WorldData::operator()(const Common::SightingEvent& ev)
-{
-	return false;
-}
-
-bool WorldData::operator()(const Common::ShotEvent& ev)
 {
 	return false;
 }
@@ -274,6 +297,10 @@ bool WorldData::movementAllowed(const MovementInput& i) const
 	}
 
 	if(sd->position == i.to) {
+		return false;
+	}
+
+	if(sd->aps.aps < mMapData.movementCost(i.to)) {
 		return false;
 	}
 

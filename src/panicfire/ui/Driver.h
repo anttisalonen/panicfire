@@ -22,10 +22,16 @@ class Driver : public ::Common::Driver, public boost::static_visitor<> {
 	public:
 		Driver(Common::WorldInterface& w);
 		~Driver();
-		void operator()(const Common::MovementEvent& ev);
+
+		// event handling
+		void operator()(const Common::InputEvent& ev);
 		void operator()(const Common::SightingEvent& ev);
-		void operator()(const Common::ShotEvent& ev);
 		void operator()(const Common::EmptyEvent& ev);
+
+		// input event handling
+		void operator()(const Common::MovementInput& ev);
+		void operator()(const Common::ShotInput& ev);
+		void operator()(const Common::FinishTurnInput& ev);
 
 	protected:
 		bool init() override;

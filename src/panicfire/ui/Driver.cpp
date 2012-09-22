@@ -19,7 +19,8 @@ Driver::Driver(Common::WorldInterface& w)
 	mCameraZoom(10.0f),
 	mCameraZoomVelocity(0.0f),
 	mMyTeamID(TeamID(1)),
-	mMoving(false)
+	mMoving(false),
+	mAI(w)
 {
 	mCamera.x = mCameraZoom;
 	mCamera.y = mCameraZoom;
@@ -45,43 +46,11 @@ Driver::~Driver()
 bool Driver::init()
 {
 	SDL_utils::setupOrthoScreen(getScreenWidth(), getScreenHeight());
-	{
-		Common::QueryResult qr = mWorld.query(Common::MapQuery());
-		if(!boost::apply_visitor(mData, qr)) {
-			std::cerr << "Map query failed.\n";
-			return false;
-		}
-		assert(mData.getMapData());
-		mAStar.setMapData(mData.getMapData());
-	}
+	if(!mData.sync(mWorld))
+		return false;
 
-	for(unsigned int i = 1; i <= MAX_NUM_TEAMS; i++) {
-		TeamID tid = TeamID(i);
-		Common::QueryResult qr = mWorld.query(Common::TeamQuery(tid));
-		if(!boost::apply_visitor(mData, qr)) {
-			std::cerr << "Team query failed for team " << tid.id << ".\n";
-			return false;
-		}
-		TeamData* td = mData.getTeam(tid);
-		assert(td);
-		if(td) {
-			for(unsigned int j = 0; j < MAX_TEAM_SOLDIERS; j++) {
-				if(!td->soldiers[j].id)
-					continue;
-				SoldierID sid = td->soldiers[j];
-				Common::QueryResult qr2 = mWorld.query(Common::SoldierQuery(sid));
-				if(!boost::apply_visitor(mData, qr2)) {
-					std::cerr << "Soldier query failed for soldier " << sid.id << ".\n";
-					return false;
-				}
-			}
-		}
-	}
-
-	{
-		updateCurrentSoldier();
-		tryCenterCamera();
-	}
+	mAStar.setMapData(mData.getMapData());
+	tryCenterCamera();
 
 	return true;
 }
@@ -143,6 +112,10 @@ void Driver::handleEvents()
 			break;
 		boost::apply_visitor(*this, ev);
 	}
+
+	if(mData.getCurrentTeamID() != mMyTeamID) {
+		mAI.act();
+	}
 }
 
 void Driver::operator()(const Common::InputEvent& ev)
@@ -162,6 +135,7 @@ void Driver::operator()(const Common::EmptyEvent& ev)
 
 void Driver::operator()(const Common::MovementInput& ev)
 {
+	tryCenterCamera();
 	if(mMoving &&
 			mData.teamIDFromSoldierID(ev.mover) == mMyTeamID &&
 			ev.mover == mCommandedSoldierID && ev.to == mMovementPosition) {
@@ -390,6 +364,7 @@ void Driver::updateCurrentSoldier()
 	Common::QueryResult qr = mWorld.query(Common::CurrentSoldierQuery());
 	if(!boost::apply_visitor(mData, qr)) {
 		std::cerr << "Current soldier query failed.\n";
+		assert(0);
 	}
 }
 

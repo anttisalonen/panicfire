@@ -10,7 +10,7 @@ using namespace PanicFire::Common;
 
 World::World()
 {
-	mData = new WorldData(50, 50, 8);
+	mData = new WorldData(24, 24, MAX_TEAM_SOLDIERS);
 }
 
 World::~World()

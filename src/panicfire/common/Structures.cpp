@@ -107,6 +107,49 @@ WorldData::WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers)
 		s = 0;
 }
 
+bool WorldData::sync(WorldInterface& wi)
+{
+	{
+		Common::QueryResult qr = wi.query(Common::MapQuery());
+		if(!boost::apply_visitor(*this, qr)) {
+			std::cerr << "Map query failed.\n";
+			return false;
+		}
+		assert(this->getMapData());
+	}
+
+	for(unsigned int i = 1; i <= MAX_NUM_TEAMS; i++) {
+		TeamID tid = TeamID(i);
+		Common::QueryResult qr = wi.query(Common::TeamQuery(tid));
+		if(!boost::apply_visitor(*this, qr)) {
+			std::cerr << "Team query failed for team " << tid.id << ".\n";
+			return false;
+		}
+		TeamData* td = getTeam(tid);
+		assert(td);
+		if(td) {
+			for(unsigned int j = 0; j < MAX_TEAM_SOLDIERS; j++) {
+				if(!td->soldiers[j].id)
+					continue;
+				SoldierID sid = td->soldiers[j];
+				Common::QueryResult qr2 = wi.query(Common::SoldierQuery(sid));
+				if(!boost::apply_visitor(*this, qr2)) {
+					std::cerr << "Soldier query failed for soldier " << sid.id << ".\n";
+					return false;
+				}
+			}
+		}
+	}
+
+	Common::QueryResult qr = wi.query(Common::CurrentSoldierQuery());
+	if(!boost::apply_visitor(*this, qr)) {
+		std::cerr << "Current soldier query failed.\n";
+		return false;
+	}
+
+	return true;
+}
+
 unsigned int WorldData::teamIndexFromTeamID(TeamID s)
 {
 	return s.id - 1;
@@ -223,9 +266,11 @@ void WorldData::advanceCurrent()
 
 	// advance soldier ID within team
 	int increments = 0;
+	bool found = true;
 	do {
 		if(increments == MAX_TEAM_SOLDIERS) {
 			std::cerr << "Warning: no live soldier found for team.\n";
+			found = false;
 			break;
 		}
 		mCurrentSoldierIDIndex[tindex]++;
@@ -233,7 +278,11 @@ void WorldData::advanceCurrent()
 		if(mCurrentSoldierIDIndex[tindex] >= MAX_TEAM_SOLDIERS) {
 			mCurrentSoldierIDIndex[tindex] = 0;
 		}
-	} while(mSoldierData[mCurrentSoldierIDIndex[tindex]].health.health == 0);
+	} while(getCurrentSoldier()->health.health == 0);
+
+	if(found) {
+		getCurrentSoldier()->aps.aps = MAX_APS;
+	}
 
 	assert(mCurrentSoldierIDIndex[tindex] < MAX_TEAM_SOLDIERS);
 }
@@ -308,7 +357,6 @@ bool WorldData::operator()(const Common::MovementInput& ev)
 {
 	auto sd = getSoldier(ev.mover);
 	assert(sd);
-	assert(movementAllowed(ev));
 	sd->position = ev.to;
 	sd->aps.aps -= mMapData.movementCost(ev.to);
 	return false;

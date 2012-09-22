@@ -10,13 +10,13 @@
 
 #include "panicfire/common/Structures.h"
 
+#include "panicfire/ai/AI.h"
+
 #include "panicfire/ui/AStar.h"
 
 namespace PanicFire {
 
 namespace UI {
-
-class Driver;
 
 class Driver : public ::Common::Driver, public boost::static_visitor<> {
 	public:
@@ -77,6 +77,7 @@ class Driver : public ::Common::Driver, public boost::static_visitor<> {
 		bool mMoving;
 		Common::Position mMovementPosition;
 		Common::SoldierID mCommandedSoldierID;
+		AI::AI mAI;
 };
 
 }

@@ -11,7 +11,7 @@ namespace PanicFire {
 
 namespace Common {
 
-#define MAX_TEAM_SOLDIERS 8
+#define MAX_TEAM_SOLDIERS 4
 #define MAX_NUM_TEAMS 2
 
 struct SoldierID {
@@ -248,6 +248,7 @@ class WorldData : public boost::static_visitor<bool> {
 		WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers);
 
 		static TeamID teamIDFromSoldierID(SoldierID s);
+		bool sync(WorldInterface& wi);
 
 		TeamData* getTeam(TeamID t);
 		TeamData* getTeam(SoldierID t);

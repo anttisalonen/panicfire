@@ -32,9 +32,9 @@ bool World::input(const Common::Input& i)
 	return boost::get<DeniedQueryResult>(&qr) == 0;
 }
 
-Common::Event World::pollEvents()
+Common::Event World::pollEvents(TeamID tid)
 {
-	auto tid = mData->getCurrentSoldier()->teamid;
+	/* TODO: check client */
 	auto tindex = mData->teamIndexFromTeamID(tid);
 	auto& q = mEventQueue[tindex];
 	if(q.empty()) {
@@ -79,11 +79,13 @@ Common::QueryResult World::operator()(const Common::CurrentSoldierQuery& q)
 {
 	CurrentSoldierQueryResult sqr;
 	sqr.soldier = mData->getCurrentSoldierID();
+	sqr.team = mData->getCurrentTeamID();
 	return sqr;
 }
 
 Common::QueryResult World::operator()(const Common::MovementInput& i)
 {
+	/* TODO: check client */
 	if(!mData->movementAllowed(i)) {
 		return DeniedQueryResult();
 	}
@@ -105,8 +107,13 @@ Common::QueryResult World::operator()(const Common::ShotInput& i)
 
 Common::QueryResult World::operator()(const Common::FinishTurnInput& i)
 {
-	/* TODO */
-	return DeniedQueryResult();
+	/* TODO: check client */
+	(*mData)(i);
+
+	for(auto& q : mEventQueue) {
+		q.push(InputEvent(i));
+	}
+	return InvalidQueryResult();
 }
 
 }

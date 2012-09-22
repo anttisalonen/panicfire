@@ -55,7 +55,11 @@ class Driver : public ::Common::Driver, public boost::static_visitor<> {
 		::Common::Vector2 tileToScreenCoord(const Common::Position& p);
 		Common::Position getMousePosition() const;
 		void sendInput();
+		void sendEndOfTurn();
 		void handleEvents();
+		void updateCurrentSoldier();
+		void tryCenterCamera();
+		void getVisibleMapCoordinates(Common::Position& tl, Common::Position& br) const;
 
 		Common::WorldInterface& mWorld;
 		Common::WorldData mData;

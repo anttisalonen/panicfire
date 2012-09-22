@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include <stdexcept>
 
 #include "common/Random.h"
@@ -70,6 +72,8 @@ unsigned int MapData::movementCost(const Position& p) const
 
 WorldData::WorldData()
 {
+	for(auto &s : mCurrentSoldierIDIndex)
+		s = 0;
 }
 
 WorldData::WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers)
@@ -87,8 +91,8 @@ WorldData::WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers)
 			if(i == 0)
 				mSoldierData[sid - 1].position.x = j;
 			else
-				mSoldierData[sid - 1].position.x = w - j;
-			mSoldierData[sid - 1].position.y = i == 0 ? 0 : h - 1;;
+				mSoldierData[sid - 1].position.x = w - j - 1;
+			mSoldierData[sid - 1].position.y = i == 0 ? 0 : h - 1;
 			mSoldierData[sid - 1].health.health = 100;
 			mSoldierData[sid - 1].active = true;
 			mSoldierData[sid - 1].direction = i == 0 ? Direction::SE : Direction::NW;
@@ -98,7 +102,9 @@ WorldData::WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers)
 			sid++;
 		}
 	}
-	mCurrentSoldierID = 1;
+	mCurrentTeamID = 1;
+	for(auto &s : mCurrentSoldierIDIndex)
+		s = 0;
 }
 
 unsigned int WorldData::teamIndexFromTeamID(TeamID s)
@@ -150,7 +156,11 @@ MapData* WorldData::getMapData()
 
 SoldierData* WorldData::getCurrentSoldier()
 {
-	return getSoldier(mCurrentSoldierID);
+	auto td = getTeam(mCurrentTeamID);
+	assert(td);
+	auto sindex = soldierIndexFromSoldierID(td->soldiers[mCurrentSoldierIDIndex[teamIndexFromTeamID(mCurrentTeamID)]]);
+	assert(sindex < mSoldierData.size());
+	return &mSoldierData[sindex];
 }
 
 const TeamData* WorldData::getTeam(TeamID t) const
@@ -184,17 +194,48 @@ const MapData* WorldData::getMapData() const
 
 const SoldierData* WorldData::getCurrentSoldier() const
 {
-	return getSoldier(mCurrentSoldierID);
+	auto td = getTeam(mCurrentTeamID);
+	assert(td);
+	unsigned int sindex = soldierIndexFromSoldierID(td->soldiers[mCurrentSoldierIDIndex[teamIndexFromTeamID(mCurrentTeamID)]]);
+	assert(sindex < mSoldierData.size());
+	return &mSoldierData[sindex];
 }
 
 SoldierID WorldData::getCurrentSoldierID() const
 {
-	return mCurrentSoldierID;
+	return getCurrentSoldier()->id;
 }
 
-void WorldData::setCurrentSoldierID(SoldierID i)
+TeamID WorldData::getCurrentTeamID() const
 {
-	mCurrentSoldierID = i;
+	return mCurrentTeamID;
+}
+
+void WorldData::advanceCurrent()
+{
+	// advance team ID
+	mCurrentTeamID.id++;
+	if(teamIndexFromTeamID(mCurrentTeamID) >= MAX_NUM_TEAMS)
+		mCurrentTeamID.id = 1;
+	auto tindex = teamIndexFromTeamID(mCurrentTeamID);
+
+	assert(tindex < mCurrentSoldierIDIndex.size());
+
+	// advance soldier ID within team
+	int increments = 0;
+	do {
+		if(increments == MAX_TEAM_SOLDIERS) {
+			std::cerr << "Warning: no live soldier found for team.\n";
+			break;
+		}
+		mCurrentSoldierIDIndex[tindex]++;
+		increments++;
+		if(mCurrentSoldierIDIndex[tindex] >= MAX_TEAM_SOLDIERS) {
+			mCurrentSoldierIDIndex[tindex] = 0;
+		}
+	} while(mSoldierData[mCurrentSoldierIDIndex[tindex]].health.health == 0);
+
+	assert(mCurrentSoldierIDIndex[tindex] < MAX_TEAM_SOLDIERS);
 }
 
 bool WorldData::operator()(const Common::SoldierQueryResult& q)
@@ -232,9 +273,23 @@ bool WorldData::operator()(const Common::MapQueryResult& q)
 
 bool WorldData::operator()(const Common::CurrentSoldierQueryResult& q)
 {
-	std::cout << "Current soldier query successful.\n";
-	mCurrentSoldierID = q.soldier;
-	return true;
+	mCurrentTeamID = q.team;
+	unsigned int i = 0;
+	bool found = false;
+	for(auto& s : mTeamData[teamIndexFromTeamID(mCurrentTeamID)].soldiers) {
+		if(s == q.soldier) {
+			mCurrentSoldierIDIndex[teamIndexFromTeamID(mCurrentTeamID)] = i;
+			found = true;
+			break;
+		}
+		i++;
+	}
+	if(found) {
+		return true;
+	} else {
+		std::cerr << "Error: couldn't find referenced soldier in current soldier query.\n";
+		return false;
+	}
 }
 
 bool WorldData::operator()(const Common::DeniedQueryResult& q)
@@ -266,6 +321,7 @@ bool WorldData::operator()(const Common::ShotInput& ev)
 
 bool WorldData::operator()(const Common::FinishTurnInput& ev)
 {
+	advanceCurrent();
 	return false;
 }
 
@@ -292,7 +348,7 @@ bool WorldData::movementAllowed(const MovementInput& i) const
 		return false;
 	}
 
-	if(i.mover != mCurrentSoldierID) {
+	if(i.mover != getCurrentSoldierID()) {
 		return false;
 	}
 

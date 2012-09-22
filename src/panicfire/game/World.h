@@ -19,7 +19,7 @@ class World : public Common::WorldInterface,
 
 		Common::QueryResult query(const Common::Query& q);
 		bool input(const Common::Input& i);
-		Common::Event pollEvents();
+		Common::Event pollEvents(Common::TeamID tid);
 
 		Common::QueryResult operator()(const Common::SoldierQuery& q);
 		Common::QueryResult operator()(const Common::MapQuery& q);

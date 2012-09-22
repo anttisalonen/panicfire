@@ -220,6 +220,7 @@ struct TeamQueryResult {
 };
 
 struct CurrentSoldierQueryResult {
+	TeamID team;
 	SoldierID soldier;
 };
 
@@ -238,7 +239,7 @@ class WorldInterface {
 		virtual ~WorldInterface() { }
 		virtual QueryResult query(const Query& q) = 0;
 		virtual bool input(const Input& i) = 0;
-		virtual Event pollEvents() = 0;
+		virtual Event pollEvents(TeamID tid) = 0;
 };
 
 class WorldData : public boost::static_visitor<bool> {
@@ -261,7 +262,8 @@ class WorldData : public boost::static_visitor<bool> {
 		const SoldierData* getCurrentSoldier() const;
 
 		SoldierID getCurrentSoldierID() const;
-		void setCurrentSoldierID(SoldierID i);
+		TeamID getCurrentTeamID() const;
+		void advanceCurrent();
 		bool movementAllowed(const MovementInput& i) const;
 
 		bool operator()(const Common::SoldierQueryResult& q);
@@ -288,7 +290,8 @@ class WorldData : public boost::static_visitor<bool> {
 		MapData mMapData;
 		std::array<TeamData, MAX_NUM_TEAMS> mTeamData;
 		std::array<SoldierData, MAX_NUM_TEAMS * MAX_TEAM_SOLDIERS> mSoldierData;
-		SoldierID mCurrentSoldierID;
+		TeamID mCurrentTeamID;
+		std::array<unsigned int, MAX_NUM_TEAMS> mCurrentSoldierIDIndex;
 };
 
 }

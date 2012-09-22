@@ -79,18 +79,8 @@ bool Driver::init()
 	}
 
 	{
-		Common::QueryResult qr = mWorld.query(Common::CurrentSoldierQuery());
-		if(!boost::apply_visitor(mData, qr)) {
-			std::cerr << "Current soldier query failed.\n";
-			return false;
-		}
-
-		const SoldierData* sd = mData.getCurrentSoldier();
-		if(sd) {
-			const Position& p = sd->position;
-			mCamera.x = p.x;
-			mCamera.y = p.y;
-		}
+		updateCurrentSoldier();
+		tryCenterCamera();
 	}
 
 	return true;
@@ -133,10 +123,21 @@ void Driver::sendInput()
 	}
 }
 
+void Driver::sendEndOfTurn()
+{
+	if(mData.getCurrentTeamID() != mMyTeamID)
+		return;
+
+	bool succ = mWorld.input(FinishTurnInput());
+	assert(succ);
+	mPathLine.clear();
+	mMoving = false;
+}
+
 void Driver::handleEvents()
 {
 	while(1) {
-		auto ev = mWorld.pollEvents();
+		auto ev = mWorld.pollEvents(mMyTeamID);
 		bool empty = boost::apply_visitor(mData, ev);
 		if(empty)
 			break;
@@ -174,15 +175,32 @@ void Driver::operator()(const Common::ShotInput& ev)
 
 void Driver::operator()(const Common::FinishTurnInput& ev)
 {
+	updateCurrentSoldier();
+	tryCenterCamera();
 }
 
-void Driver::drawFrame()
+void Driver::getVisibleMapCoordinates(Position& tl, Position& br) const
 {
 	unsigned int miny = std::max(0.0f, mCamera.y - mCameraZoom);
 	unsigned int minx = std::max(0.0f, mCamera.x - mCameraZoom);
 	const MapData* map = mData.getMapData();
 	unsigned int maxy = std::min(map->getHeight(), (unsigned int)(mCamera.y + mCameraZoom + 1));
 	unsigned int maxx = std::min(map->getWidth(),  (unsigned int)(mCamera.x + mCameraZoom + 1));
+	tl.x = minx;
+	tl.y = miny;
+	br.x = maxx;
+	br.y = maxy;
+}
+
+void Driver::drawFrame()
+{
+	Position tl, br;
+	getVisibleMapCoordinates(tl, br);
+	unsigned int minx, miny, maxx, maxy;
+	minx = tl.x; miny = tl.y; maxx = br.x; maxy = br.y;
+
+	const MapData* map = mData.getMapData();
+
 	for(unsigned int j = miny; j < maxy; j++) {
 		for(unsigned int i = minx; i < maxx; i++) {
 			auto fr = map->getPoint(i, j);
@@ -258,6 +276,9 @@ bool Driver::handleKeyUp(float frameTime, SDLKey key)
 bool Driver::handleMousePress(float frameTime, Uint8 button)
 {
 	if(button == SDL_BUTTON_LEFT) {
+		if(mData.getCurrentTeamID() != mMyTeamID)
+			return false;
+
 		auto tgtpos = getMousePosition();
 		const MapData* map = mData.getMapData();
 		if(tgtpos.x < map->getWidth() &&
@@ -340,6 +361,7 @@ bool Driver::handleKey(float frameTime, SDLKey key, bool pressed)
 		case SDLK_d: mCameraVelocity.x = pressed ? camSpeed : 0.0f; break;
 		case SDLK_q: mCameraZoomVelocity = pressed ? camZoomSpeed : 0.0f; break;
 		case SDLK_e: mCameraZoomVelocity = pressed ? -camZoomSpeed : 0.0f; break;
+		case SDLK_KP_ENTER: case SDLK_RETURN: if(pressed) sendEndOfTurn(); break;
 		case SDLK_ESCAPE:
 			 return true;
 		default: break;
@@ -363,6 +385,29 @@ bool Driver::handleKey(float frameTime, SDLKey key, bool pressed)
 	}
 }
 
+void Driver::updateCurrentSoldier()
+{
+	Common::QueryResult qr = mWorld.query(Common::CurrentSoldierQuery());
+	if(!boost::apply_visitor(mData, qr)) {
+		std::cerr << "Current soldier query failed.\n";
+	}
+}
+
+void Driver::tryCenterCamera()
+{
+	const SoldierData* sd = mData.getCurrentSoldier();
+	if(sd) {
+		const Position& p = sd->position;
+		Position tl, br;
+		getVisibleMapCoordinates(tl, br);
+		const int border = 3;
+		if(p.x < tl.x + border || p.x > br.x - border ||
+				p.y < tl.y + border || p.y > br.y - border) {
+			mCamera.x = p.x;
+			mCamera.y = p.y;
+		}
+	}
+}
 
 }
 

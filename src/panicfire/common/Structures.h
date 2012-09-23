@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <array>
+#include <set>
 
 #include <boost/variant.hpp>
 
@@ -332,6 +333,8 @@ class WorldData : public boost::static_visitor<bool> {
 
 		// call this function only for a team where all the soldiers are known
 		bool teamLost(TeamID tid) const;
+
+		std::set<Position> getSoldierPositions() const;
 
 		bool operator()(const Common::SoldierQueryResult& q);
 		bool operator()(const Common::TeamQueryResult& q);

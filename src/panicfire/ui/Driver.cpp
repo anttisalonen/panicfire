@@ -303,7 +303,7 @@ bool Driver::handleMousePress(float frameTime, Uint8 button)
 			if(!tgtsoldier) {
 				// move
 				auto prevpos = sd->position;
-				auto l = mAStar.solve(std::set<Position>(),
+				auto l = mAStar.solve(mData.getSoldierPositions(),
 						prevpos, tgtpos);
 				if(!l.empty()) {
 					mPathLine.clear();

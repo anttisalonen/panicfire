@@ -431,8 +431,15 @@ bool WorldData::movementAllowed(const MovementInput& i) const
 		return false;
 	}
 
-	return abs(sd->position.x - i.to.x) <= 1 &&
-			abs(sd->position.y - i.to.y) <= 1;
+	if(!(abs(sd->position.x - i.to.x) <= 1 && abs(sd->position.y - i.to.y) <= 1)) {
+		return false;
+	}
+
+	if(getSoldierAt(i.to)) {
+		return false;
+	}
+
+	return true;
 }
 
 bool WorldData::shotAllowed(const ShotInput& i) const
@@ -492,6 +499,16 @@ bool WorldData::teamLost(TeamID tid) const
 
 	return true;
 }
+
+std::set<Position> WorldData::getSoldierPositions() const
+{
+	std::set<Position> ret;
+	for(auto& sd : mSoldierData) {
+		ret.insert(sd.position);
+	}
+	return ret;
+}
+
 
 }
 

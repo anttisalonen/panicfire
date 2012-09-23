@@ -101,8 +101,49 @@ Common::QueryResult World::operator()(const Common::MovementInput& i)
 
 Common::QueryResult World::operator()(const Common::ShotInput& i)
 {
-	/* TODO */
-	return DeniedQueryResult();
+	/* TODO: check client */
+	if(!mData->shotAllowed(i)) {
+		return DeniedQueryResult();
+	}
+
+	bool empty = (*mData)(i);
+	assert(!empty);
+
+	/* TODO: add checking for obstacles and range */
+	for(auto& q : mEventQueue) {
+		q.push(InputEvent(i));
+	}
+
+	auto tgtsoldier = mData->getSoldierAt(i.target);
+	if(tgtsoldier) {
+		Health nh(tgtsoldier->health);
+		nh -= Health(40);
+		SoldierWoundedEvent ev(tgtsoldier->id, nh);
+
+		bool empty = (*mData)(ev);
+		assert(!empty);
+
+		for(auto& q : mEventQueue) {
+			q.push(ev);
+		}
+
+		if(nh.value == 0) {
+			TeamID t = tgtsoldier->teamid;
+			if(mData->teamLost(t)) {
+				static_assert(MAX_NUM_TEAMS == 2, "currently only two teams are supported");
+				GameWonEvent gwe(t.id == 1 ? TeamID(2) : TeamID(1));
+
+				bool empty = (*mData)(gwe);
+				assert(!empty);
+
+				for(auto& q : mEventQueue) {
+					q.push(gwe);
+				}
+
+			}
+		}
+	}
+	return InvalidQueryResult();
 }
 
 Common::QueryResult World::operator()(const Common::FinishTurnInput& i)

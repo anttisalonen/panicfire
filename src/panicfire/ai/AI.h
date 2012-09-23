@@ -24,6 +24,8 @@ class AI : public boost::static_visitor<> {
 		// event handling
 		void operator()(const Common::InputEvent& ev);
 		void operator()(const Common::SightingEvent& ev);
+		void operator()(const Common::SoldierWoundedEvent& ev);
+		void operator()(const Common::GameWonEvent& ev);
 		void operator()(const Common::EmptyEvent& ev);
 
 		// input event handling
@@ -47,6 +49,7 @@ class AI : public boost::static_visitor<> {
 		bool mMoving;
 		Common::Position mMovementPosition;
 		Common::SoldierID mCommandedSoldierID;
+		bool mGameOver;
 };
 
 }

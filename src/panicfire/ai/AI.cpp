@@ -17,7 +17,8 @@ namespace AI {
 AI::AI(Common::WorldInterface& w)
 	: mWorld(w),
 	mMyTeamID(TeamID(2)),
-	mMoving(false)
+	mMoving(false),
+	mGameOver(false)
 {
 	if(!mData.sync(mWorld))
 		throw std::runtime_error("Fail on sync data");
@@ -37,6 +38,15 @@ void AI::operator()(const Common::InputEvent& ev)
 
 void AI::operator()(const Common::SightingEvent& ev)
 {
+}
+
+void AI::operator()(const Common::SoldierWoundedEvent& ev)
+{
+}
+
+void AI::operator()(const Common::GameWonEvent& ev)
+{
+	mGameOver = true;
 }
 
 void AI::operator()(const Common::EmptyEvent& ev)
@@ -66,6 +76,9 @@ void AI::operator()(const Common::FinishTurnInput& ev)
 
 void AI::act()
 {
+	if(mGameOver)
+		return;
+
 	handleEvents();
 	sendEndOfTurn();
 }

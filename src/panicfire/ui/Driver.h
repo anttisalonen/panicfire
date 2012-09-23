@@ -26,6 +26,8 @@ class Driver : public ::Common::Driver, public boost::static_visitor<> {
 		// event handling
 		void operator()(const Common::InputEvent& ev);
 		void operator()(const Common::SightingEvent& ev);
+		void operator()(const Common::SoldierWoundedEvent& ev);
+		void operator()(const Common::GameWonEvent& ev);
 		void operator()(const Common::EmptyEvent& ev);
 
 		// input event handling
@@ -60,6 +62,7 @@ class Driver : public ::Common::Driver, public boost::static_visitor<> {
 		void updateCurrentSoldier();
 		void tryCenterCamera();
 		void getVisibleMapCoordinates(Common::Position& tl, Common::Position& br) const;
+		void shootAt(const Common::Position& tgtpos);
 
 		Common::WorldInterface& mWorld;
 		Common::WorldData mData;
@@ -78,6 +81,7 @@ class Driver : public ::Common::Driver, public boost::static_visitor<> {
 		Common::Position mMovementPosition;
 		Common::SoldierID mCommandedSoldierID;
 		AI::AI mAI;
+		bool mGameOver;
 };
 
 }

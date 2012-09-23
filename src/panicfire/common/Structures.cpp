@@ -6,7 +6,7 @@
 
 #include "panicfire/common/Structures.h"
 
-#define MAX_APS	25
+#define SHOT_APS_REQUIRED	8
 
 namespace PanicFire {
 
@@ -93,10 +93,10 @@ WorldData::WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers)
 			else
 				mSoldierData[sid - 1].position.x = w - j - 1;
 			mSoldierData[sid - 1].position.y = i == 0 ? 0 : h - 1;
-			mSoldierData[sid - 1].health.health = 100;
+			mSoldierData[sid - 1].health.value = MAX_HEALTH;
 			mSoldierData[sid - 1].active = true;
 			mSoldierData[sid - 1].direction = i == 0 ? Direction::SE : Direction::NW;
-			mSoldierData[sid - 1].aps.aps = MAX_APS;
+			mSoldierData[sid - 1].aps.value = MAX_APS;
 			mTeamData[i].soldiers[j].id = sid;
 
 			sid++;
@@ -278,10 +278,10 @@ void WorldData::advanceCurrent()
 		if(mCurrentSoldierIDIndex[tindex] >= MAX_TEAM_SOLDIERS) {
 			mCurrentSoldierIDIndex[tindex] = 0;
 		}
-	} while(getCurrentSoldier()->health.health == 0);
+	} while(getCurrentSoldier()->health.value == 0);
 
 	if(found) {
-		getCurrentSoldier()->aps.aps = MAX_APS;
+		getCurrentSoldier()->aps.value = MAX_APS;
 	}
 
 	assert(mCurrentSoldierIDIndex[tindex] < MAX_TEAM_SOLDIERS);
@@ -325,7 +325,9 @@ bool WorldData::operator()(const Common::CurrentSoldierQueryResult& q)
 	mCurrentTeamID = q.team;
 	unsigned int i = 0;
 	bool found = false;
-	for(auto& s : mTeamData[teamIndexFromTeamID(mCurrentTeamID)].soldiers) {
+	auto td = getTeam(mCurrentTeamID);
+	assert(td);
+	for(auto& s : td->soldiers) {
 		if(s == q.soldier) {
 			mCurrentSoldierIDIndex[teamIndexFromTeamID(mCurrentTeamID)] = i;
 			found = true;
@@ -358,12 +360,15 @@ bool WorldData::operator()(const Common::MovementInput& ev)
 	auto sd = getSoldier(ev.mover);
 	assert(sd);
 	sd->position = ev.to;
-	sd->aps.aps -= mMapData.movementCost(ev.to);
+	sd->aps.value -= mMapData.movementCost(ev.to);
 	return false;
 }
 
 bool WorldData::operator()(const Common::ShotInput& ev)
 {
+	auto sd = getSoldier(ev.shooter);
+	assert(sd);
+	sd->aps -= APs(SHOT_APS_REQUIRED);
 	return false;
 }
 
@@ -380,6 +385,24 @@ bool WorldData::operator()(const Common::InputEvent& ev)
 }
 
 bool WorldData::operator()(const Common::SightingEvent& ev)
+{
+	return false;
+}
+
+bool WorldData::operator()(const Common::SoldierWoundedEvent& ev)
+{
+	auto sd = getSoldier(ev.wounded);
+	if(!sd) {
+		std::cerr << "Warning: soldier wounded event received but no information on soldier.\n";
+		return false;
+	}
+
+	sd->health = ev.newhealth;
+
+	return false;
+}
+
+bool WorldData::operator()(const Common::GameWonEvent& ev)
 {
 	return false;
 }
@@ -404,12 +427,70 @@ bool WorldData::movementAllowed(const MovementInput& i) const
 		return false;
 	}
 
-	if(sd->aps.aps < mMapData.movementCost(i.to)) {
+	if(sd->aps.value < mMapData.movementCost(i.to)) {
 		return false;
 	}
 
 	return abs(sd->position.x - i.to.x) <= 1 &&
 			abs(sd->position.y - i.to.y) <= 1;
+}
+
+bool WorldData::shotAllowed(const ShotInput& i) const
+{
+	auto sd = getSoldier(i.shooter);
+	if(!sd) {
+		return false;
+	}
+
+	if(i.shooter != getCurrentSoldierID()) {
+		return false;
+	}
+
+	if(sd->aps.value < SHOT_APS_REQUIRED) {
+		return false;
+	}
+
+	if(sd->position == i.target) {
+		return false;
+	}
+
+	return true;
+}
+
+SoldierData* WorldData::getSoldierAt(const Position& p)
+{
+	for(auto& s : mSoldierData) {
+		if(s.position == p)
+			return &s;
+	}
+	return nullptr;
+}
+
+const SoldierData* WorldData::getSoldierAt(const Position& p) const
+{
+	for(auto& s : mSoldierData) {
+		if(s.position == p)
+			return &s;
+	}
+	return nullptr;
+}
+
+bool WorldData::teamLost(TeamID tid) const
+{
+	auto td = getTeam(tid);
+	assert(td);
+	for(auto sid : td->soldiers) {
+		auto sd = getSoldier(sid);
+		assert(sd);
+		if(!sd) {
+			std::cerr << "WorldData::teamLost called without full information\n";
+			return false;
+		}
+		if(sd->health.value != 0)
+			return false;
+	}
+
+	return true;
 }
 
 }

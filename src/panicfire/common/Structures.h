@@ -7,12 +7,17 @@
 
 #include <boost/variant.hpp>
 
+#include "common/Math.h"
+
 namespace PanicFire {
 
 namespace Common {
 
-#define MAX_TEAM_SOLDIERS 4
-#define MAX_NUM_TEAMS 2
+#define MAX_TEAM_SOLDIERS	4
+#define MAX_NUM_TEAMS		2
+
+#define MAX_HEALTH	100
+#define MAX_APS		25
 
 struct SoldierID {
 	SoldierID(unsigned int tid = 0) : id(tid) { }
@@ -82,12 +87,55 @@ inline bool Position::operator!=(const Position& oth) const
 	return !(*this == oth);
 }
 
-struct Health {
-	unsigned int health = 0;
+template<unsigned int maxx>
+struct Capped {
+	Capped(unsigned int h) : value(h) { value = ::Common::clamp(0u, value, maxx); }
+	unsigned int value;
+	inline Capped operator-(const Capped& rhs) const;
+	inline void operator-=(const Capped& rhs);
+	inline Capped operator+(const Capped& rhs) const;
+	inline void operator+=(const Capped& rhs);
 };
 
-struct APs {
-	unsigned int aps = 0;
+template<unsigned int maxx>
+Capped<maxx> Capped<maxx>::operator-(const Capped& rhs) const
+{
+	Capped r(*this);
+	r -= rhs;
+	return r;
+}
+
+template<unsigned int maxx>
+void Capped<maxx>::operator-=(const Capped& rhs)
+{
+	if(rhs.value > value)
+		value = 0;
+	else
+		value -= rhs.value;
+}
+
+template<unsigned int maxx>
+Capped<maxx> Capped<maxx>::operator+(const Capped& rhs) const
+{
+	Capped r(*this);
+	r += rhs;
+	return r;
+}
+
+template<unsigned int maxx>
+void Capped<maxx>::operator+=(const Capped& rhs)
+{
+	value += rhs.value;
+	if(value > maxx)
+		value = maxx;
+}
+
+struct Health : public Capped<MAX_HEALTH> {
+	Health(unsigned int h = MAX_HEALTH) : Capped(h) { }
+};
+
+struct APs : public Capped<MAX_APS> {
+	APs(unsigned int h = MAX_APS) : Capped(h) { }
 };
 
 enum class Direction {
@@ -162,6 +210,7 @@ struct MovementInput {
 };
 
 struct ShotInput {
+	ShotInput(SoldierID i, const Position& p) : shooter(i), target(p) { }
 	SoldierID shooter;
 	Position target;
 };
@@ -177,6 +226,17 @@ struct SightingEvent {
 	SoldierID seen;
 };
 
+struct SoldierWoundedEvent {
+	SoldierWoundedEvent(SoldierID w, Health h) : wounded(w), newhealth(h) { }
+	SoldierID wounded;
+	Health newhealth;
+};
+
+struct GameWonEvent {
+	GameWonEvent(TeamID w) : winner(w) { }
+	TeamID winner;
+};
+
 struct EmptyEvent {
 };
 
@@ -185,7 +245,7 @@ struct InputEvent {
 	Input input;
 };
 
-typedef boost::variant<InputEvent, SightingEvent, EmptyEvent> Event;
+typedef boost::variant<InputEvent, SightingEvent, SoldierWoundedEvent, GameWonEvent, EmptyEvent> Event;
 
 // queries
 struct SoldierQuery {
@@ -255,17 +315,23 @@ class WorldData : public boost::static_visitor<bool> {
 		SoldierData* getSoldier(SoldierID s);
 		MapData* getMapData();
 		SoldierData* getCurrentSoldier();
+		SoldierData* getSoldierAt(const Position& p);
 
 		const TeamData* getTeam(TeamID t) const;
 		const TeamData* getTeam(SoldierID t) const;
 		const SoldierData* getSoldier(SoldierID s) const;
 		const MapData* getMapData() const;
 		const SoldierData* getCurrentSoldier() const;
+		const SoldierData* getSoldierAt(const Position& p) const;
 
 		SoldierID getCurrentSoldierID() const;
 		TeamID getCurrentTeamID() const;
 		void advanceCurrent();
 		bool movementAllowed(const MovementInput& i) const;
+		bool shotAllowed(const ShotInput& i) const;
+
+		// call this function only for a team where all the soldiers are known
+		bool teamLost(TeamID tid) const;
 
 		bool operator()(const Common::SoldierQueryResult& q);
 		bool operator()(const Common::TeamQueryResult& q);
@@ -277,6 +343,8 @@ class WorldData : public boost::static_visitor<bool> {
 		// event handling - return true for EmptyEvent only
 		bool operator()(const Common::InputEvent& ev);
 		bool operator()(const Common::SightingEvent& ev);
+		bool operator()(const Common::SoldierWoundedEvent& ev);
+		bool operator()(const Common::GameWonEvent& ev);
 		bool operator()(const Common::EmptyEvent& ev);
 
 		// input event handling

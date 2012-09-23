@@ -20,7 +20,8 @@ Driver::Driver(Common::WorldInterface& w)
 	mCameraZoomVelocity(0.0f),
 	mMyTeamID(TeamID(1)),
 	mMoving(false),
-	mAI(w)
+	mAI(w),
+	mGameOver(false)
 {
 	mCamera.x = mCameraZoom;
 	mCamera.y = mCameraZoom;
@@ -69,6 +70,9 @@ bool Driver::prerenderUpdate(float frameTime)
 
 void Driver::sendInput()
 {
+	if(mGameOver)
+		return;
+
 	if(!mPathLine.empty() && !mMoving) {
 		auto sd = mData.getCurrentSoldier();
 		assert(sd);
@@ -97,10 +101,28 @@ void Driver::sendEndOfTurn()
 	if(mData.getCurrentTeamID() != mMyTeamID)
 		return;
 
+	if(mGameOver)
+		return;
+
 	bool succ = mWorld.input(FinishTurnInput());
 	assert(succ);
 	mPathLine.clear();
 	mMoving = false;
+}
+
+void Driver::shootAt(const Common::Position& tgtpos)
+{
+	if(mData.getCurrentTeamID() != mMyTeamID)
+		return;
+
+	if(mGameOver)
+		return;
+
+	bool succ = mWorld.input(ShotInput(mData.getCurrentSoldierID(), tgtpos));
+	if(!succ) {
+		/* TODO: display this on GUI instead. */
+		std::cout << "Unable to shoot.\n";
+	}
 }
 
 void Driver::handleEvents()
@@ -126,6 +148,19 @@ void Driver::operator()(const Common::InputEvent& ev)
 void Driver::operator()(const Common::SightingEvent& ev)
 {
 	std::cout << "Sighting!\n";
+}
+
+void Driver::operator()(const Common::SoldierWoundedEvent& ev)
+{
+	/* TODO: display in GUI */
+	std::cout << "Soldier got shot at!\n";
+}
+
+void Driver::operator()(const Common::GameWonEvent& ev)
+{
+	/* TODO: display in GUI */
+	std::cout << "Game won by team " << ev.winner.id << "\n";
+	mGameOver = true;
 }
 
 void Driver::operator()(const Common::EmptyEvent& ev)
@@ -200,7 +235,8 @@ void Driver::drawFrame()
 					assert(sd);
 					if(sd) {
 						const Position& p = sd->position;
-						if(p.x >= minx && p.x < maxx &&
+						if(sd->health.value > 0 &&
+								p.x >= minx && p.x < maxx &&
 								p.y >= miny && p.y < maxy) {
 							drawSoldierTile(p.x, p.y, sd->direction, td->id);
 						}
@@ -253,12 +289,19 @@ bool Driver::handleMousePress(float frameTime, Uint8 button)
 		if(mData.getCurrentTeamID() != mMyTeamID)
 			return false;
 
+		if(mGameOver)
+			return false;
+
 		auto tgtpos = getMousePosition();
 		const MapData* map = mData.getMapData();
 		if(tgtpos.x < map->getWidth() &&
 				tgtpos.y < map->getHeight()) {
 			auto sd = mData.getCurrentSoldier();
-			if(sd) {
+			assert(sd);
+
+			auto tgtsoldier = mData.getSoldierAt(tgtpos);
+			if(!tgtsoldier) {
+				// move
 				auto prevpos = sd->position;
 				auto l = mAStar.solve(std::set<Position>(),
 						prevpos, tgtpos);
@@ -267,6 +310,11 @@ bool Driver::handleMousePress(float frameTime, Uint8 button)
 					for(auto& p : l) {
 						mPathLine.push_back(p);
 					}
+				}
+			} else {
+				if(tgtsoldier->teamid != mMyTeamID) {
+					// shoot
+					shootAt(tgtpos);
 				}
 			}
 		}

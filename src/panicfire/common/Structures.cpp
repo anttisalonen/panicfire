@@ -197,13 +197,13 @@ MapData* WorldData::getMapData()
 	return &mMapData;
 }
 
-SoldierData* WorldData::getCurrentSoldier()
+SoldierData& WorldData::getCurrentSoldier()
 {
 	auto td = getTeam(mCurrentTeamID);
 	assert(td);
 	auto sindex = soldierIndexFromSoldierID(td->soldiers[mCurrentSoldierIDIndex[teamIndexFromTeamID(mCurrentTeamID)]]);
 	assert(sindex < mSoldierData.size());
-	return &mSoldierData[sindex];
+	return mSoldierData[sindex];
 }
 
 const TeamData* WorldData::getTeam(TeamID t) const
@@ -235,18 +235,18 @@ const MapData* WorldData::getMapData() const
 	return &mMapData;
 }
 
-const SoldierData* WorldData::getCurrentSoldier() const
+const SoldierData& WorldData::getCurrentSoldier() const
 {
 	auto td = getTeam(mCurrentTeamID);
 	assert(td);
 	unsigned int sindex = soldierIndexFromSoldierID(td->soldiers[mCurrentSoldierIDIndex[teamIndexFromTeamID(mCurrentTeamID)]]);
 	assert(sindex < mSoldierData.size());
-	return &mSoldierData[sindex];
+	return mSoldierData[sindex];
 }
 
 SoldierID WorldData::getCurrentSoldierID() const
 {
-	return getCurrentSoldier()->id;
+	return getCurrentSoldier().id;
 }
 
 TeamID WorldData::getCurrentTeamID() const
@@ -278,10 +278,10 @@ void WorldData::advanceCurrent()
 		if(mCurrentSoldierIDIndex[tindex] >= MAX_TEAM_SOLDIERS) {
 			mCurrentSoldierIDIndex[tindex] = 0;
 		}
-	} while(getCurrentSoldier()->health.value == 0);
+	} while(getCurrentSoldier().health.value == 0);
 
 	if(found) {
-		getCurrentSoldier()->aps.value = MAX_APS;
+		getCurrentSoldier().aps.value = MAX_APS;
 	}
 
 	assert(mCurrentSoldierIDIndex[tindex] < MAX_TEAM_SOLDIERS);
@@ -374,7 +374,6 @@ bool WorldData::operator()(const Common::ShotInput& ev)
 
 bool WorldData::operator()(const Common::FinishTurnInput& ev)
 {
-	advanceCurrent();
 	return false;
 }
 
@@ -509,6 +508,19 @@ std::set<Position> WorldData::getSoldierPositions() const
 	return ret;
 }
 
+void WorldData::syncCurrentSoldier(WorldInterface& wi)
+{
+	Common::QueryResult qr = wi.query(Common::CurrentSoldierQuery());
+	if(!boost::apply_visitor(*this, qr)) {
+		assert(0);
+		throw std::runtime_error("Current soldier query failed");
+	}
+	Common::QueryResult qr2 = wi.query(Common::SoldierQuery(getCurrentSoldierID()));
+	if(!boost::apply_visitor(*this, qr2)) {
+		assert(0);
+		throw std::runtime_error("Soldier query failed when syncing current");
+	}
+}
 
 }
 

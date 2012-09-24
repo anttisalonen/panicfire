@@ -11,6 +11,7 @@ int main(void)
 	try {
 		Game::World w;
 		UI::Driver d(w);
+		srand(0);
 		d.run();
 	}
 	catch (std::exception& e) {

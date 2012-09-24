@@ -3,6 +3,7 @@
 
 #include "common/Rectangle.h"
 #include "common/SDL_utils.h"
+#include "common/Random.h"
 
 #include "panicfire/ai/AI.h"
 
@@ -14,130 +15,212 @@ namespace PanicFire {
 
 namespace AI {
 
-AI::AI(Common::WorldInterface& w)
+// AIData
+AIData::AIData(Common::WorldInterface& w)
 	: mWorld(w),
 	mMyTeamID(TeamID(2)),
-	mMoving(false),
-	mGameOver(false)
+	mGameOver(false),
+	mMyTurn(false)
 {
 	if(!mData.sync(mWorld))
 		throw std::runtime_error("Fail on sync data");
 
+	mTeamPlan.setAIData(this);
+
 	mAStar.setMapData(mData.getMapData());
 }
 
-AI::~AI()
+void AIData::updateCurrentSoldier()
+{
+	mData.syncCurrentSoldier(mWorld);
+	mMyTurn = mData.getCurrentTeamID() == mMyTeamID;
+}
+
+// TeamPlan
+TeamPlan::TeamPlan()
+	: mAIData(nullptr)
 {
 }
 
-
-void AI::operator()(const Common::InputEvent& ev)
+void TeamPlan::setAIData(AIData* d)
 {
-	boost::apply_visitor(*this, ev.input);
+	mAIData = d;
 }
 
-void AI::operator()(const Common::SightingEvent& ev)
+void TeamPlan::positionVisited(const Position& p)
 {
+	mVisitPositions.erase(p);
 }
 
-void AI::operator()(const Common::SoldierWoundedEvent& ev)
+Position TeamPlan::getNextVisitPosition() const
 {
-}
+	assert(mAIData);
+	if(mVisitPositions.empty()) {
+		auto w = mAIData->mData.getMapData()->getWidth();
+		auto h = mAIData->mData.getMapData()->getHeight();
+		if(w == 0 || h == 0) {
+			throw std::runtime_error("AI: empty map");
+		}
+		unsigned int numPositions = w * h / 20;
+		for(unsigned int i = 0; i < numPositions; i++) {
+			mVisitPositions.insert(Position(Random::uniform(0, w),
+						Random::uniform(0, h)));
+		}
+	}
 
-void AI::operator()(const Common::GameWonEvent& ev)
-{
-	mGameOver = true;
-}
-
-void AI::operator()(const Common::EmptyEvent& ev)
-{
+	assert(!mVisitPositions.empty());
+	unsigned int mmax = mVisitPositions.size();
+	unsigned int t = Random::uniform(0, mmax);
+	for(std::set<Position>::const_iterator it = mVisitPositions.begin(); it != mVisitPositions.end(); ++it) {
+		if(t == 0) {
+			Position p = *it;
+			mVisitPositions.erase(it);
+			return p;
+		}
+		else
+			t--;
+	}
 	assert(0);
+	return *mVisitPositions.begin();
 }
 
-
-void AI::operator()(const Common::MovementInput& ev)
+// SoldierPlan
+SoldierPlan::SoldierPlan(AIData& d, SoldierID i)
+	: mAIData(d),
+	mID(i),
+	mMoving(false)
 {
-	if(mMoving &&
-			mData.teamIDFromSoldierID(ev.mover) == mMyTeamID &&
-			ev.mover == mCommandedSoldierID && ev.to == mMovementPosition) {
-		mMoving = false;
+	mTargetPosition = mAIData.mData.getSoldier(mID)->position;
+}
+
+void SoldierPlan::act()
+{
+	do {
+		handleEvents();
+		if(mAIData.mMyTurn)
+			sendInput();
+	} while(mAIData.mMyTurn);
+}
+
+void SoldierPlan::setupPath()
+{
+	auto sd = mAIData.mData.getSoldier(mID);
+	if(sd->position == mTargetPosition) {
+		do {
+			mTargetPosition = mAIData.mTeamPlan.getNextVisitPosition();
+			mPath = mAIData.mAStar.solve(mAIData.mData.getSoldierPositions(),
+					sd->position, mTargetPosition);
+		} while(mPath.empty());
 	}
 }
 
-void AI::operator()(const Common::ShotInput& ev)
+void SoldierPlan::sendInput()
 {
-}
+	auto sd = mAIData.mData.getSoldier(mID);
+	if(mPath.empty() || *mPath.begin() == sd->position) {
+		setupPath();
+		assert(!mPath.empty());
+	}
 
-void AI::operator()(const Common::FinishTurnInput& ev)
-{
-	updateCurrentSoldier();
-}
-
-
-void AI::act()
-{
-	if(mGameOver)
-		return;
-
-	handleEvents();
-	sendEndOfTurn();
-}
-
-
-void AI::sendInput()
-{
-	if(!mPathLine.empty() && !mMoving) {
-		auto sd = mData.getCurrentSoldier();
-		assert(sd);
-		for(auto pit = mPathLine.begin(); pit != mPathLine.end(); ) {
-			if(sd->position == *pit) {
-				pit = mPathLine.erase(pit);
+	for(auto pit = mPath.begin(); pit != mPath.end(); ) {
+		if(sd->position == *pit) {
+			pit = mPath.erase(pit);
+		} else {
+			MovementInput i(mAIData.mData.getCurrentSoldierID(), *pit);
+			if(mAIData.mData.movementAllowed(i)) {
+				bool succ = mAIData.mWorld.input(i);
+				assert(succ);
+				mMoving = true;
 			} else {
-				MovementInput i(mData.getCurrentSoldierID(), *pit);
-				if(mData.movementAllowed(i)) {
-					bool succ = mWorld.input(i);
-					assert(succ);
-					if(succ) {
-						mMoving = true;
-						mMovementPosition = *pit;
-						mCommandedSoldierID = sd->id;
-					}
-				}
-				break;
+				bool succ = mAIData.mWorld.input(FinishTurnInput());
+				assert(succ);
 			}
+			break;
 		}
 	}
 }
 
-void AI::sendEndOfTurn()
-{
-	if(mData.getCurrentTeamID() != mMyTeamID)
-		return;
-
-	bool succ = mWorld.input(FinishTurnInput());
-	assert(succ);
-	mPathLine.clear();
-	mMoving = false;
-}
-
-void AI::handleEvents()
+void SoldierPlan::handleEvents()
 {
 	while(1) {
-		auto ev = mWorld.pollEvents(mMyTeamID);
-		bool empty = boost::apply_visitor(mData, ev);
+		auto ev = mAIData.mWorld.pollEvents(mAIData.mMyTeamID);
+		bool empty = boost::apply_visitor(mAIData.mData, ev);
 		if(empty)
 			break;
 		boost::apply_visitor(*this, ev);
 	}
 }
 
-void AI::updateCurrentSoldier()
+void SoldierPlan::operator()(const Common::InputEvent& ev)
 {
-	Common::QueryResult qr = mWorld.query(Common::CurrentSoldierQuery());
-	if(!boost::apply_visitor(mData, qr)) {
-		std::cerr << "AI: current soldier query failed.\n";
-		assert(0);
+	boost::apply_visitor(*this, ev.input);
+}
+
+void SoldierPlan::operator()(const Common::SightingEvent& ev)
+{
+}
+
+void SoldierPlan::operator()(const Common::SoldierWoundedEvent& ev)
+{
+}
+
+void SoldierPlan::operator()(const Common::GameWonEvent& ev)
+{
+	mAIData.mGameOver = true;
+}
+
+void SoldierPlan::operator()(const Common::EmptyEvent& ev)
+{
+	assert(0);
+}
+
+void SoldierPlan::operator()(const Common::MovementInput& ev)
+{
+	if(mMoving &&
+			ev.mover == mID) {
+		mMoving = false;
 	}
+}
+
+void SoldierPlan::operator()(const Common::ShotInput& ev)
+{
+}
+
+void SoldierPlan::operator()(const Common::FinishTurnInput& ev)
+{
+	mAIData.updateCurrentSoldier();
+}
+
+AI::AI(Common::WorldInterface& w)
+	: mAIData(w)
+{
+}
+
+AI::~AI()
+{
+}
+
+void AI::act()
+{
+	mAIData.updateCurrentSoldier();
+
+	if(mAIData.mGameOver)
+		return;
+
+	sendInput();
+}
+
+void AI::sendInput()
+{
+	auto sd = mAIData.mData.getCurrentSoldier();
+	assert(sd.teamid == mAIData.mData.getCurrentTeamID());
+	assert(sd.teamid == mAIData.mMyTeamID);
+
+	auto it = mAIData.mSoldierPlan.find(sd.id);
+	if(it == mAIData.mSoldierPlan.end()) {
+		it = mAIData.mSoldierPlan.insert({sd.id, SoldierPlan(mAIData, sd.id)}).first;
+	}
+	it->second.act();
 }
 
 

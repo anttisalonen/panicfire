@@ -16,10 +16,23 @@ namespace PanicFire {
 
 namespace AI {
 
-class AI : public boost::static_visitor<> {
+class AIData;
+
+class TeamPlan {
 	public:
-		AI(Common::WorldInterface& w);
-		~AI();
+		TeamPlan();
+		void setAIData(AIData* data);
+		void positionVisited(const Common::Position& p);
+		Common::Position getNextVisitPosition() const;
+
+	private:
+		AIData* mAIData;
+		mutable std::set<Common::Position> mVisitPositions;
+};
+
+class SoldierPlan : public boost::static_visitor<> {
+	public:
+		SoldierPlan(AIData& d, Common::SoldierID i);
 
 		// event handling
 		void operator()(const Common::InputEvent& ev);
@@ -36,20 +49,48 @@ class AI : public boost::static_visitor<> {
 		void act();
 
 	private:
+		void syncSoldierData();
+		void handleEvents();
+		void setupPath();
+		void sendInput();
+
+		AIData& mAIData;
+		Common::SoldierID mID;
+		bool mMoving;
+		Common::Position mTargetPosition;
+		std::list<Common::Position> mPath;
+};
+
+struct AIData {
+	AIData(Common::WorldInterface& w);
+	void updateCurrentSoldier();
+
+	Common::WorldInterface& mWorld;
+	Common::WorldData mData;
+	std::map<Common::SoldierID, SoldierPlan> mSoldierPlan;
+	UI::AStar mAStar;
+	Common::TeamID mMyTeamID;
+	bool mGameOver;
+	TeamPlan mTeamPlan;
+	bool mMyTurn;
+};
+
+class AI {
+	public:
+		AI(Common::WorldInterface& w);
+		~AI();
+
+		void act();
+
+	private:
 		void sendInput();
 		void sendEndOfTurn();
-		void handleEvents();
-		void updateCurrentSoldier();
 
-		Common::WorldInterface& mWorld;
-		Common::WorldData mData;
-		UI::AStar mAStar;
+		AIData mAIData;
 		std::list<Common::Position> mPathLine;
-		Common::TeamID mMyTeamID;
-		bool mMoving;
 		Common::Position mMovementPosition;
 		Common::SoldierID mCommandedSoldierID;
-		bool mGameOver;
+
 };
 
 }

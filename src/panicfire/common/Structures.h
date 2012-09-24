@@ -23,9 +23,21 @@ namespace Common {
 struct SoldierID {
 	SoldierID(unsigned int tid = 0) : id(tid) { }
 	unsigned int id;
+	bool operator<(const SoldierID& oth) const;
 	bool operator==(const SoldierID& oth) const;
 	bool operator!=(const SoldierID& oth) const;
 };
+
+inline std::ostream& operator<<(std::ostream& out, const SoldierID& p)
+{
+	out << "Soldier ID " << p.id;
+	return out;
+}
+
+inline bool SoldierID::operator<(const SoldierID& oth) const
+{
+	return id < oth.id;
+}
 
 inline bool SoldierID::operator==(const SoldierID& oth) const
 {
@@ -43,6 +55,12 @@ struct TeamID {
 	bool operator==(const TeamID& oth) const;
 	bool operator!=(const TeamID& oth) const;
 };
+
+inline std::ostream& operator<<(std::ostream& out, const TeamID& p)
+{
+	out << "Team ID " << p.id;
+	return out;
+}
 
 inline bool TeamID::operator==(const TeamID& oth) const
 {
@@ -315,14 +333,14 @@ class WorldData : public boost::static_visitor<bool> {
 		TeamData* getTeam(SoldierID t);
 		SoldierData* getSoldier(SoldierID s);
 		MapData* getMapData();
-		SoldierData* getCurrentSoldier();
+		SoldierData& getCurrentSoldier();
 		SoldierData* getSoldierAt(const Position& p);
 
 		const TeamData* getTeam(TeamID t) const;
 		const TeamData* getTeam(SoldierID t) const;
 		const SoldierData* getSoldier(SoldierID s) const;
 		const MapData* getMapData() const;
-		const SoldierData* getCurrentSoldier() const;
+		const SoldierData& getCurrentSoldier() const;
 		const SoldierData* getSoldierAt(const Position& p) const;
 
 		SoldierID getCurrentSoldierID() const;
@@ -335,6 +353,7 @@ class WorldData : public boost::static_visitor<bool> {
 		bool teamLost(TeamID tid) const;
 
 		std::set<Position> getSoldierPositions() const;
+		void syncCurrentSoldier(WorldInterface& wi);
 
 		bool operator()(const Common::SoldierQueryResult& q);
 		bool operator()(const Common::TeamQueryResult& q);

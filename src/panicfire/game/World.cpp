@@ -151,6 +151,8 @@ Common::QueryResult World::operator()(const Common::FinishTurnInput& i)
 	/* TODO: check client */
 	(*mData)(i);
 
+	mData->advanceCurrent();
+
 	for(auto& q : mEventQueue) {
 		q.push(InputEvent(i));
 	}

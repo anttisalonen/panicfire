@@ -75,20 +75,17 @@ void Driver::sendInput()
 
 	if(!mPathLine.empty() && !mMoving) {
 		auto sd = mData.getCurrentSoldier();
-		assert(sd);
 		for(auto pit = mPathLine.begin(); pit != mPathLine.end(); ) {
-			if(sd->position == *pit) {
+			if(sd.position == *pit) {
 				pit = mPathLine.erase(pit);
 			} else {
 				MovementInput i(mData.getCurrentSoldierID(), *pit);
 				if(mData.movementAllowed(i)) {
 					bool succ = mWorld.input(i);
 					assert(succ);
-					if(succ) {
-						mMoving = true;
-						mMovementPosition = *pit;
-						mCommandedSoldierID = sd->id;
-					}
+					mMoving = true;
+					mMovementPosition = *pit;
+					mCommandedSoldierID = sd.id;
 				}
 				break;
 			}
@@ -297,12 +294,11 @@ bool Driver::handleMousePress(float frameTime, Uint8 button)
 		if(tgtpos.x < map->getWidth() &&
 				tgtpos.y < map->getHeight()) {
 			auto sd = mData.getCurrentSoldier();
-			assert(sd);
 
 			auto tgtsoldier = mData.getSoldierAt(tgtpos);
 			if(!tgtsoldier) {
 				// move
-				auto prevpos = sd->position;
+				auto prevpos = sd.position;
 				auto l = mAStar.solve(mData.getSoldierPositions(),
 						prevpos, tgtpos);
 				if(!l.empty()) {
@@ -409,26 +405,20 @@ bool Driver::handleKey(float frameTime, SDLKey key, bool pressed)
 
 void Driver::updateCurrentSoldier()
 {
-	Common::QueryResult qr = mWorld.query(Common::CurrentSoldierQuery());
-	if(!boost::apply_visitor(mData, qr)) {
-		std::cerr << "Current soldier query failed.\n";
-		assert(0);
-	}
+	mData.syncCurrentSoldier(mWorld);
 }
 
 void Driver::tryCenterCamera()
 {
-	const SoldierData* sd = mData.getCurrentSoldier();
-	if(sd) {
-		const Position& p = sd->position;
-		Position tl, br;
-		getVisibleMapCoordinates(tl, br);
-		const int border = 3;
-		if(p.x < tl.x + border || p.x > br.x - border ||
-				p.y < tl.y + border || p.y > br.y - border) {
-			mCamera.x = p.x;
-			mCamera.y = p.y;
-		}
+	const SoldierData& sd = mData.getCurrentSoldier();
+	const Position& p = sd.position;
+	Position tl, br;
+	getVisibleMapCoordinates(tl, br);
+	const int border = 3;
+	if(p.x < tl.x + border || p.x > br.x - border ||
+			p.y < tl.y + border || p.y > br.y - border) {
+		mCamera.x = p.x;
+		mCamera.y = p.y;
 	}
 }
 

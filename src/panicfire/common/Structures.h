@@ -223,8 +223,9 @@ class MapData {
 
 // input
 struct MovementInput {
-	MovementInput(SoldierID i, const Position& p) : mover(i), to(p) { }
+	MovementInput(SoldierID i, const Position& fr, const Position& p) : mover(i), from(fr), to(p) { }
 	SoldierID mover;
+	Position from;
 	Position to;
 };
 

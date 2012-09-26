@@ -1,5 +1,6 @@
 #include <iostream>
 
+#include "common/Math.h"
 #include "common/Rectangle.h"
 #include "common/SDL_utils.h"
 
@@ -12,6 +13,47 @@ using namespace PanicFire::Common;
 namespace PanicFire {
 
 namespace UI {
+
+SoldierAnimation::SoldierAnimation(SoldierID i, const Common::Position& start, float s)
+	: id(i),
+	speed(s),
+	pos(0.0f)
+{
+	addPosition(start);
+}
+
+::Common::Vector2 SoldierAnimation::getPosition() const
+{
+	if(path.empty())
+		return Vector2(0, 0);
+
+	if(path.size() == 1) {
+		auto& p = *path.begin();
+		return Vector2(p.x, p.y);
+	}
+
+	auto& p1 = *path.begin();
+	auto& p2 = *(++path.begin());
+	Vector2 vp1(p1.x, p1.y);
+	Vector2 vp2(p2.x, p2.y);
+	Vector2 off = (vp2 - vp1) * pos;
+	Vector2 r = vp1 + off;
+	return r;
+}
+
+void SoldierAnimation::addPosition(const Common::Position& p)
+{
+	path.push_back(p);
+}
+
+void SoldierAnimation::advance(float p)
+{
+	pos += p * speed;
+	while(pos > 1.0f && !path.empty()) {
+		path.pop_front();
+		pos -= 1.0f;
+	}
+}
 
 Drawer::Drawer()
 	: mCameraZoom(10.0f),
@@ -69,6 +111,53 @@ void Drawer::moveCamera(const Vector2& v)
 	mCamera += v;
 }
 
+void Drawer::advanceAnimation(float ft)
+{
+	for(std::map<SoldierID, SoldierAnimation>::iterator ait = mSoldierAnimation.begin();
+			ait != mSoldierAnimation.end(); ) {
+		ait->second.advance(ft);
+		if(ait->second.path.size() < 2) {
+			ait = mSoldierAnimation.erase(ait);
+			if(mSoldierAnimation.empty()) {
+				centerCamera();
+			}
+		} else {
+			++ait;
+		}
+	}
+}
+
+void Drawer::addSoldierAnimation(SoldierID i, const Common::Position& from,
+		const Common::Position& to)
+{
+	auto ait = mSoldierAnimation.find(i);
+	if(ait == mSoldierAnimation.end()) {
+		SoldierAnimation t(i, from, 2.0f);
+		t.addPosition(to);
+		mSoldierAnimation.insert({i, t});
+	} else {
+		ait->second.addPosition(to);
+	}
+}
+
+bool Drawer::isSoldierAnimated(SoldierID i) const
+{
+	return mSoldierAnimation.find(i) != mSoldierAnimation.end();
+}
+
+bool Drawer::isAnySoldierAnimated() const
+{
+	return !mSoldierAnimation.empty();
+}
+
+void Drawer::drawSoldierAnimation(const SoldierAnimation& a)
+{
+	Vector2 pos = a.getPosition();
+	const SoldierData* sd = mWorldData->getSoldier(a.id);
+	assert(sd);
+	drawSoldierTile(pos, sd->direction, sd->teamid);
+}
+
 ::Common::Rectangle Drawer::getTexCoord(unsigned int i)
 {
 	Rectangle tex(0.00f, 0.25f, 0.25f, -0.25f);
@@ -77,30 +166,41 @@ void Drawer::moveCamera(const Vector2& v)
 	return tex;
 }
 
-::Common::Vector2 Drawer::tileToScreenCoord(const Common::Position& p)
+::Common::Vector2 Drawer::tileToScreenCoord(const ::Common::Vector2& p)
 {
 	return Vector2(mTileWidth * (p.x - mCamera.x) + mScreenWidth * 0.5f,
 			mTileWidth * (mCamera.y - p.y) + mScreenHeight * 0.5f);
 }
 
+::Common::Vector2 Drawer::tileToScreenCoord(const Common::Position& p)
+{
+	return tileToScreenCoord(Vector2(p.x, p.y));
+}
+
 void Drawer::drawGrassTile(unsigned int x, unsigned int y, GrassLevel l)
 {
-	drawTile(x, y, getTexCoord((unsigned int)l), mGrassTexture);
+	drawTile(Position(x, y), getTexCoord((unsigned int)l), mGrassTexture);
 }
 
 void Drawer::drawSpot(unsigned int x, unsigned int y)
 {
-	drawTile(x, y, Rectangle(0, 0, 1, 1), mSpotTexture);
+	drawTile(Position(x, y), Rectangle(0, 0, 1, 1), mSpotTexture);
 }
 
-void Drawer::drawSoldierTile(unsigned int x, unsigned int y, Common::Direction l, TeamID tid)
+void Drawer::drawSoldierTile(const ::Common::Vector2& p, Common::Direction l,
+		Common::TeamID tid)
 {
-	drawTile(x, y, getTexCoord((unsigned int)l), mSoldierTextures[tid.id == 1 ? 0 : 1]);
+	drawTile(p, getTexCoord((unsigned int)l), mSoldierTextures[tid.id == 1 ? 0 : 1]);
+}
+
+void Drawer::drawSoldierTile(const Position& p, Common::Direction l, TeamID tid)
+{
+	drawTile(p, getTexCoord((unsigned int)l), mSoldierTextures[tid.id == 1 ? 0 : 1]);
 }
 
 void Drawer::drawVegetationTile(unsigned int x, unsigned int y, Common::VegetationLevel l)
 {
-	drawTile(x, y, getTexCoord((unsigned int)l), mVegetationTexture);
+	drawTile(Position(x, y), getTexCoord((unsigned int)l), mVegetationTexture);
 }
 
 void Drawer::drawLine(const Common::Position& p1, const Common::Position& p2)
@@ -117,13 +217,20 @@ void Drawer::drawLine(const Common::Position& p1, const Common::Position& p2)
 			Color::White, 1.0f);
 }
 
-void Drawer::drawTile(unsigned int x, unsigned int y,
+void Drawer::drawTile(const ::Common::Vector2& p,
 		const ::Common::Rectangle& texcoord,
 		const ::Common::Texture* t)
 {
-	auto s = tileToScreenCoord(Position(x, y));
+	auto s = tileToScreenCoord(p);
 	SDL_utils::drawSprite(*t, Rectangle(s.x, s.y,
 				mTileWidth, mTileWidth), texcoord, 0.0f);
+}
+
+void Drawer::drawTile(const Common::Position& p,
+		const ::Common::Rectangle& texcoord,
+		const ::Common::Texture* t)
+{
+	return drawTile(Vector2(p.x, p.y), texcoord, t);
 }
 
 Common::Position Drawer::getMousePosition() const
@@ -175,10 +282,15 @@ void Drawer::drawFrame()
 						if(sd->health.value > 0 &&
 								p.x >= minx && p.x < maxx &&
 								p.y >= miny && p.y < maxy) {
-							if(mWorldData->getCurrentSoldierID() == sid) {
-								drawSpot(p.x, p.y);
+							auto ait = mSoldierAnimation.find(sid);
+							if(ait == mSoldierAnimation.end()) {
+								if(mWorldData->getCurrentSoldierID() == sid) {
+									drawSpot(p.x, p.y);
+								}
+								drawSoldierTile(p, sd->direction, td->id);
+							} else {
+								drawSoldierAnimation(ait->second);
 							}
-							drawSoldierTile(p.x, p.y, sd->direction, td->id);
 						}
 					}
 				}
@@ -194,10 +306,32 @@ void Drawer::drawFrame()
 	}
 }
 
+SoldierID Drawer::getAnimatedSoldier() const
+{
+	if(mSoldierAnimation.empty())
+		return SoldierID(0);
+	else
+		return mSoldierAnimation.begin()->second.id;
+}
+
 void Drawer::centerCamera()
 {
-	const SoldierData& sd = mWorldData->getCurrentSoldier();
-	const Position& p = sd.position;
+	SoldierID sid;
+	sid = getAnimatedSoldier();
+	if(sid.id == 0)
+		sid = mWorldData->getCurrentSoldierID();
+
+	const SoldierData* sd = mWorldData->getSoldier(sid);
+	if(!sd)
+		return;
+
+	Vector2 p;
+	auto ait = mSoldierAnimation.find(sd->id);
+	if(ait == mSoldierAnimation.end())
+		p = Vector2(sd->position.x, sd->position.y);
+	else
+		p = ait->second.getPosition();
+
 	Position tl, br;
 	getVisibleMapCoordinates(tl, br);
 	const int border = 3;
@@ -243,7 +377,6 @@ Driver::Driver(Common::WorldInterface& w)
 	mWorld(w),
 	mCameraZoomVelocity(0.0f),
 	mMyTeamID(TeamID(1)),
-	mMoving(false),
 	mAI(w),
 	mGameOver(false)
 {
@@ -271,11 +404,17 @@ bool Driver::init()
 
 bool Driver::prerenderUpdate(float frameTime)
 {
-	mDrawer.moveCamera(mCameraVelocity * frameTime);
-	mDrawer.addCameraZoom(mCameraZoomVelocity * frameTime);
-
 	handleEvents();
 	sendInput();
+	handleEvents(); // handle response to input
+
+	mDrawer.moveCamera(mCameraVelocity * frameTime);
+	mDrawer.addCameraZoom(mCameraZoomVelocity * frameTime);
+	mDrawer.advanceAnimation(frameTime);
+
+	if(mDrawer.isAnySoldierAnimated()) {
+		mDrawer.centerCamera();
+	}
 
 	return false;
 }
@@ -298,17 +437,25 @@ void Driver::sendInput()
 	if(mGameOver)
 		return;
 
-	if(!mPathLine.empty() && !mMoving) {
+	if(mData.getCurrentTeamID() != mMyTeamID)
+		return;
+
+	{
+		auto sid = mDrawer.getAnimatedSoldier();
+		if(sid.id != 0 && mData.teamIDFromSoldierID(sid) != mMyTeamID)
+			return;
+	}
+
+	if(!mPathLine.empty()) {
 		auto sd = mData.getCurrentSoldier();
 		for(auto pit = mPathLine.begin(); pit != mPathLine.end(); ) {
 			if(sd.position == *pit) {
 				pit = mPathLine.erase(pit);
 			} else {
-				MovementInput i(mData.getCurrentSoldierID(), *pit);
+				MovementInput i(mData.getCurrentSoldierID(), sd.position, *pit);
 				if(mData.movementAllowed(i)) {
 					bool succ = mWorld.input(i);
 					assert(succ);
-					mMoving = true;
 					mMovementPosition = *pit;
 					mCommandedSoldierID = sd.id;
 				}
@@ -326,10 +473,12 @@ void Driver::sendEndOfTurn()
 	if(mGameOver)
 		return;
 
+	if(mDrawer.isAnySoldierAnimated())
+		return;
+
 	bool succ = mWorld.input(FinishTurnInput());
 	assert(succ);
 	mPathLine.clear();
-	mMoving = false;
 }
 
 void Driver::shootAt(const Common::Position& tgtpos)
@@ -393,11 +542,7 @@ void Driver::operator()(const Common::EmptyEvent& ev)
 void Driver::operator()(const Common::MovementInput& ev)
 {
 	mDrawer.centerCamera();
-	if(mMoving &&
-			mData.teamIDFromSoldierID(ev.mover) == mMyTeamID &&
-			ev.mover == mCommandedSoldierID && ev.to == mMovementPosition) {
-		mMoving = false;
-	}
+	mDrawer.addSoldierAnimation(ev.mover, ev.from, ev.to);
 }
 
 void Driver::operator()(const Common::ShotInput& ev)

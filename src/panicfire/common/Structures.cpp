@@ -422,6 +422,10 @@ bool WorldData::movementAllowed(const MovementInput& i) const
 		return false;
 	}
 
+	if(sd->position != i.from) {
+		return false;
+	}
+
 	if(sd->position == i.to) {
 		return false;
 	}

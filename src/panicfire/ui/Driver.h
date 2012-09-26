@@ -18,6 +18,18 @@ namespace PanicFire {
 
 namespace UI {
 
+struct SoldierAnimation {
+	SoldierAnimation(Common::SoldierID i, const Common::Position& start, float s);
+	::Common::Vector2 getPosition() const;
+	void addPosition(const Common::Position& p);
+	void advance(float p);
+
+	Common::SoldierID id;
+	std::list<Common::Position> path;
+	float speed;
+	float pos;
+};
+
 class Drawer {
 	public:
 		Drawer();
@@ -32,20 +44,33 @@ class Drawer {
 		void setScreenHeight(float h);
 		void addCameraZoom(float z);
 		void moveCamera(const ::Common::Vector2& v);
+		void advanceAnimation(float ft);
+		void addSoldierAnimation(Common::SoldierID i, const Common::Position& from,
+				const Common::Position& to);
+		bool isSoldierAnimated(Common::SoldierID i) const;
+		bool isAnySoldierAnimated() const;
+		Common::SoldierID getAnimatedSoldier() const;
 
 	private:
 		void drawGrassTile(unsigned int x, unsigned int y, Common::GrassLevel l);
 		void drawSpot(unsigned int x, unsigned int y);
 		void drawVegetationTile(unsigned int x, unsigned int y, Common::VegetationLevel l);
-		void drawSoldierTile(unsigned int x, unsigned int y, Common::Direction l,
+		void drawSoldierTile(const ::Common::Vector2& p, Common::Direction l,
+				Common::TeamID tid);
+		void drawSoldierTile(const Common::Position& p, Common::Direction l,
 				Common::TeamID tid);
 		static ::Common::Rectangle getTexCoord(unsigned int i);
-		void drawTile(unsigned int x, unsigned int y,
+		void drawTile(const ::Common::Vector2& p,
+				const ::Common::Rectangle& texcoord,
+				const ::Common::Texture* t);
+		void drawTile(const Common::Position& p,
 				const ::Common::Rectangle& texcoord,
 				const ::Common::Texture* t);
 		::Common::Vector2 tileToScreenCoord(const Common::Position& p);
+		::Common::Vector2 tileToScreenCoord(const ::Common::Vector2& p);
 		void getVisibleMapCoordinates(Common::Position& tl, Common::Position& br) const;
 		::Common::Color mapSideColor(bool first, const ::Common::Color& c) const;
+		void drawSoldierAnimation(const SoldierAnimation& a);
 
 		float mCameraZoom;
 		::Common::Vector2 mCamera;
@@ -57,6 +82,8 @@ class Drawer {
 		const Common::WorldData* mWorldData;
 		float mScreenWidth;
 		float mScreenHeight;
+
+		std::map<Common::SoldierID, SoldierAnimation> mSoldierAnimation;
 };
 
 class Driver : public ::Common::Driver, public boost::static_visitor<> {
@@ -100,7 +127,6 @@ class Driver : public ::Common::Driver, public boost::static_visitor<> {
 		AStar mAStar;
 		std::list<Common::Position> mPathLine;
 		Common::TeamID mMyTeamID;
-		bool mMoving;
 		Common::Position mMovementPosition;
 		Common::SoldierID mCommandedSoldierID;
 		AI::AI mAI;

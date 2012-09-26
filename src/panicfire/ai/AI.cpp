@@ -126,7 +126,7 @@ void SoldierPlan::sendInput()
 		if(sd->position == *pit) {
 			pit = mPath.erase(pit);
 		} else {
-			MovementInput i(mAIData.mData.getCurrentSoldierID(), *pit);
+			MovementInput i(mAIData.mData.getCurrentSoldierID(), sd->position, *pit);
 			if(mAIData.mData.movementAllowed(i)) {
 				bool succ = mAIData.mWorld.input(i);
 				assert(succ);

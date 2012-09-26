@@ -466,7 +466,7 @@ bool WorldData::shotAllowed(const ShotInput& i) const
 SoldierData* WorldData::getSoldierAt(const Position& p)
 {
 	for(auto& s : mSoldierData) {
-		if(s.position == p)
+		if(s.position == p && s.health.value > 0)
 			return &s;
 	}
 	return nullptr;
@@ -475,7 +475,7 @@ SoldierData* WorldData::getSoldierAt(const Position& p)
 const SoldierData* WorldData::getSoldierAt(const Position& p) const
 {
 	for(auto& s : mSoldierData) {
-		if(s.position == p)
+		if(s.position == p && s.health.value > 0)
 			return &s;
 	}
 	return nullptr;
@@ -503,7 +503,8 @@ std::set<Position> WorldData::getSoldierPositions() const
 {
 	std::set<Position> ret;
 	for(auto& sd : mSoldierData) {
-		ret.insert(sd.position);
+		if(sd.health.value > 0)
+			ret.insert(sd.position);
 	}
 	return ret;
 }

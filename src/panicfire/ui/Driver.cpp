@@ -24,6 +24,7 @@ Drawer::Drawer()
 	mCamera.y = mCameraZoom;
 	mGrassTexture = new Texture("share/grass.png", 0, 0);
 	mVegetationTexture = new Texture("share/vegetation.png", 0, 0);
+	mSpotTexture = new Texture("share/spot.png", 0, 0);
 
 	SDLSurface soldsurf("share/soldier.png");
 	for(int i = 0; i < 2; i++) {
@@ -35,8 +36,9 @@ Drawer::Drawer()
 
 Drawer::~Drawer()
 {
-	delete mGrassTexture;
+	delete mSpotTexture;
 	delete mVegetationTexture;
+	delete mGrassTexture;
 	for(auto t : mSoldierTextures)
 		delete t;
 }
@@ -84,6 +86,11 @@ void Drawer::moveCamera(const Vector2& v)
 void Drawer::drawGrassTile(unsigned int x, unsigned int y, GrassLevel l)
 {
 	drawTile(x, y, getTexCoord((unsigned int)l), mGrassTexture);
+}
+
+void Drawer::drawSpot(unsigned int x, unsigned int y)
+{
+	drawTile(x, y, Rectangle(0, 0, 1, 1), mSpotTexture);
 }
 
 void Drawer::drawSoldierTile(unsigned int x, unsigned int y, Common::Direction l, TeamID tid)
@@ -168,6 +175,9 @@ void Drawer::drawFrame()
 						if(sd->health.value > 0 &&
 								p.x >= minx && p.x < maxx &&
 								p.y >= miny && p.y < maxy) {
+							if(mWorldData->getCurrentSoldierID() == sid) {
+								drawSpot(p.x, p.y);
+							}
 							drawSoldierTile(p.x, p.y, sd->direction, td->id);
 						}
 					}

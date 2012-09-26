@@ -35,6 +35,7 @@ class Drawer {
 
 	private:
 		void drawGrassTile(unsigned int x, unsigned int y, Common::GrassLevel l);
+		void drawSpot(unsigned int x, unsigned int y);
 		void drawVegetationTile(unsigned int x, unsigned int y, Common::VegetationLevel l);
 		void drawSoldierTile(unsigned int x, unsigned int y, Common::Direction l,
 				Common::TeamID tid);
@@ -50,6 +51,7 @@ class Drawer {
 		::Common::Vector2 mCamera;
 		::Common::Texture* mGrassTexture;
 		::Common::Texture* mVegetationTexture;
+		::Common::Texture* mSpotTexture;
 		std::array< ::Common::Texture*, 2> mSoldierTextures;
 		float mTileWidth;
 		const Common::WorldData* mWorldData;

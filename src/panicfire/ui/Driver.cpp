@@ -13,15 +13,12 @@ namespace PanicFire {
 
 namespace UI {
 
-Driver::Driver(Common::WorldInterface& w)
-	: ::Common::Driver(800, 600, "Panic Fire"),
-	mWorld(w),
-	mCameraZoom(10.0f),
-	mCameraZoomVelocity(0.0f),
-	mMyTeamID(TeamID(1)),
-	mMoving(false),
-	mAI(w),
-	mGameOver(false)
+Drawer::Drawer()
+	: mCameraZoom(10.0f),
+	mTileWidth(10.0f),
+	mWorldData(nullptr),
+	mScreenWidth(10.0f),
+	mScreenHeight(10.0f)
 {
 	mCamera.x = mCameraZoom;
 	mCamera.y = mCameraZoom;
@@ -36,12 +33,214 @@ Driver::Driver(Common::WorldInterface& w)
 	}
 }
 
-Driver::~Driver()
+Drawer::~Drawer()
 {
 	delete mGrassTexture;
 	delete mVegetationTexture;
 	for(auto t : mSoldierTextures)
 		delete t;
+}
+
+void Drawer::setWorldData(const Common::WorldData* d)
+{
+	mWorldData = d;
+}
+
+void Drawer::setScreenWidth(float w)
+{
+	mScreenWidth = w;
+}
+
+void Drawer::setScreenHeight(float h)
+{
+	mScreenHeight = h;
+}
+
+void Drawer::addCameraZoom(float z)
+{
+	mCameraZoom += z;
+	mTileWidth = std::max(mScreenWidth, mScreenHeight) / (mCameraZoom * 2.0f);
+}
+
+void Drawer::moveCamera(const Vector2& v)
+{
+	mCamera += v;
+}
+
+::Common::Rectangle Drawer::getTexCoord(unsigned int i)
+{
+	Rectangle tex(0.00f, 0.25f, 0.25f, -0.25f);
+	tex.x += (i % 4) * 0.25f;
+	tex.y += (i / 4) * 0.25f;
+	return tex;
+}
+
+::Common::Vector2 Drawer::tileToScreenCoord(const Common::Position& p)
+{
+	return Vector2(mTileWidth * (p.x - mCamera.x) + mScreenWidth * 0.5f,
+			mTileWidth * (mCamera.y - p.y) + mScreenHeight * 0.5f);
+}
+
+void Drawer::drawGrassTile(unsigned int x, unsigned int y, GrassLevel l)
+{
+	drawTile(x, y, getTexCoord((unsigned int)l), mGrassTexture);
+}
+
+void Drawer::drawSoldierTile(unsigned int x, unsigned int y, Common::Direction l, TeamID tid)
+{
+	drawTile(x, y, getTexCoord((unsigned int)l), mSoldierTextures[tid.id == 1 ? 0 : 1]);
+}
+
+void Drawer::drawVegetationTile(unsigned int x, unsigned int y, Common::VegetationLevel l)
+{
+	drawTile(x, y, getTexCoord((unsigned int)l), mVegetationTexture);
+}
+
+void Drawer::drawLine(const Common::Position& p1, const Common::Position& p2)
+{
+	float htw = mTileWidth * 0.5f;
+	Vector2 vp1(tileToScreenCoord(p1));
+	Vector2 vp2(tileToScreenCoord(p2));
+	SDL_utils::drawLine(Vector3(vp1.x + htw,
+				vp1.y + htw,
+				0.0f),
+			Vector3(vp2.x + htw,
+				vp2.y + htw,
+				0.0f),
+			Color::White, 1.0f);
+}
+
+void Drawer::drawTile(unsigned int x, unsigned int y,
+		const ::Common::Rectangle& texcoord,
+		const ::Common::Texture* t)
+{
+	auto s = tileToScreenCoord(Position(x, y));
+	SDL_utils::drawSprite(*t, Rectangle(s.x, s.y,
+				mTileWidth, mTileWidth), texcoord, 0.0f);
+}
+
+Common::Position Drawer::getMousePosition() const
+{
+	int xp, yp;
+	float x, y;
+	SDL_GetMouseState(&xp, &yp);
+
+	x = xp / mTileWidth + mCamera.x - (mScreenWidth / (2.0f * mTileWidth));
+	y = 1.0f + yp / mTileWidth + mCamera.y - (mScreenHeight / (2.0f * mTileWidth));
+
+	return Position(x, y);
+}
+
+void Drawer::drawFrame()
+{
+	Position tl, br;
+	getVisibleMapCoordinates(tl, br);
+	unsigned int minx, miny, maxx, maxy;
+	minx = tl.x; miny = tl.y; maxx = br.x; maxy = br.y;
+
+	const MapData* map = mWorldData->getMapData();
+
+	for(unsigned int j = miny; j < maxy; j++) {
+		for(unsigned int i = minx; i < maxx; i++) {
+			auto fr = map->getPoint(i, j);
+			drawGrassTile(i, j, fr.grasslevel);
+		}
+	}
+
+	for(unsigned int j = miny; j < maxy; j++) {
+		for(unsigned int i = minx; i < maxx; i++) {
+			auto fr = map->getPoint(i, j);
+			drawVegetationTile(i, j, fr.vegetationlevel);
+		}
+	}
+
+	for(unsigned int t = 1; t <= MAX_NUM_TEAMS; t++) {
+		const TeamData* td = mWorldData->getTeam(TeamID(t));
+		assert(td);
+		if(td) {
+			for(unsigned int s = 0; s < MAX_TEAM_SOLDIERS; s++) {
+				SoldierID sid = td->soldiers[s];
+				if(sid.id) {
+					const SoldierData* sd = mWorldData->getSoldier(sid);
+					assert(sd);
+					if(sd) {
+						const Position& p = sd->position;
+						if(sd->health.value > 0 &&
+								p.x >= minx && p.x < maxx &&
+								p.y >= miny && p.y < maxy) {
+							drawSoldierTile(p.x, p.y, sd->direction, td->id);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for(unsigned int j = miny; j < maxy; j++) {
+		for(unsigned int i = minx; i < maxx; i++) {
+			auto fr = map->getPoint(i, j);
+			drawVegetationTile(i, j, fr.vegetationlevel);
+		}
+	}
+}
+
+void Drawer::centerCamera()
+{
+	const SoldierData& sd = mWorldData->getCurrentSoldier();
+	const Position& p = sd.position;
+	Position tl, br;
+	getVisibleMapCoordinates(tl, br);
+	const int border = 3;
+	if(p.x < tl.x + border || p.x > br.x - border ||
+			p.y < tl.y + border || p.y > br.y - border) {
+		mCamera.x = p.x;
+		mCamera.y = p.y;
+	}
+}
+
+void Drawer::getVisibleMapCoordinates(Position& tl, Position& br) const
+{
+	unsigned int miny = std::max(0.0f, mCamera.y - mCameraZoom);
+	unsigned int minx = std::max(0.0f, mCamera.x - mCameraZoom);
+	const MapData* map = mWorldData->getMapData();
+	unsigned int maxy = std::min(map->getHeight(), (unsigned int)(mCamera.y + mCameraZoom + 1));
+	unsigned int maxx = std::min(map->getWidth(),  (unsigned int)(mCamera.x + mCameraZoom + 1));
+	tl.x = minx;
+	tl.y = miny;
+	br.x = maxx;
+	br.y = maxy;
+}
+
+::Common::Color Drawer::mapSideColor(bool first, const ::Common::Color& c) const
+{
+	if(c.g >= 128 && c.r == 0 && c.b == 0) {
+		Color ret(c);
+		if(first) {
+			ret.r = c.g;
+		} else {
+			ret.b = c.g;
+		}
+		ret.g = 0;
+		return ret;
+	} else {
+		return c;
+	}
+}
+
+// driver
+Driver::Driver(Common::WorldInterface& w)
+	: ::Common::Driver(800, 600, "Panic Fire"),
+	mWorld(w),
+	mCameraZoomVelocity(0.0f),
+	mMyTeamID(TeamID(1)),
+	mMoving(false),
+	mAI(w),
+	mGameOver(false)
+{
+}
+
+Driver::~Driver()
+{
 }
 
 bool Driver::init()
@@ -51,21 +250,37 @@ bool Driver::init()
 		return false;
 
 	mAStar.setMapData(mData.getMapData());
-	tryCenterCamera();
+	mDrawer.setWorldData(&mData);
+
+	mDrawer.centerCamera();
+	mDrawer.setScreenWidth(getScreenWidth());
+	mDrawer.setScreenHeight(getScreenHeight());
 
 	return true;
 }
 
 bool Driver::prerenderUpdate(float frameTime)
 {
-	mCamera += mCameraVelocity * frameTime;
-	mCameraZoom += mCameraZoomVelocity * frameTime;
-	mTileWidth = std::max(getScreenWidth(), getScreenHeight()) / (mCameraZoom * 2.0f);
+	mDrawer.moveCamera(mCameraVelocity * frameTime);
+	mDrawer.addCameraZoom(mCameraZoomVelocity * frameTime);
 
 	handleEvents();
 	sendInput();
 
 	return false;
+}
+
+void Driver::drawFrame()
+{
+	mDrawer.drawFrame();
+
+	Position opos(UINT_MAX, 0);
+	for(auto& p : mPathLine) {
+		if(opos.x != UINT_MAX) {
+			mDrawer.drawLine(opos, p);
+		}
+		opos = p;
+	}
 }
 
 void Driver::sendInput()
@@ -167,7 +382,7 @@ void Driver::operator()(const Common::EmptyEvent& ev)
 
 void Driver::operator()(const Common::MovementInput& ev)
 {
-	tryCenterCamera();
+	mDrawer.centerCamera();
 	if(mMoving &&
 			mData.teamIDFromSoldierID(ev.mover) == mMyTeamID &&
 			ev.mover == mCommandedSoldierID && ev.to == mMovementPosition) {
@@ -182,92 +397,7 @@ void Driver::operator()(const Common::ShotInput& ev)
 void Driver::operator()(const Common::FinishTurnInput& ev)
 {
 	updateCurrentSoldier();
-	tryCenterCamera();
-}
-
-void Driver::getVisibleMapCoordinates(Position& tl, Position& br) const
-{
-	unsigned int miny = std::max(0.0f, mCamera.y - mCameraZoom);
-	unsigned int minx = std::max(0.0f, mCamera.x - mCameraZoom);
-	const MapData* map = mData.getMapData();
-	unsigned int maxy = std::min(map->getHeight(), (unsigned int)(mCamera.y + mCameraZoom + 1));
-	unsigned int maxx = std::min(map->getWidth(),  (unsigned int)(mCamera.x + mCameraZoom + 1));
-	tl.x = minx;
-	tl.y = miny;
-	br.x = maxx;
-	br.y = maxy;
-}
-
-void Driver::drawFrame()
-{
-	Position tl, br;
-	getVisibleMapCoordinates(tl, br);
-	unsigned int minx, miny, maxx, maxy;
-	minx = tl.x; miny = tl.y; maxx = br.x; maxy = br.y;
-
-	const MapData* map = mData.getMapData();
-
-	for(unsigned int j = miny; j < maxy; j++) {
-		for(unsigned int i = minx; i < maxx; i++) {
-			auto fr = map->getPoint(i, j);
-			drawGrassTile(i, j, fr.grasslevel);
-		}
-	}
-
-	for(unsigned int j = miny; j < maxy; j++) {
-		for(unsigned int i = minx; i < maxx; i++) {
-			auto fr = map->getPoint(i, j);
-			drawVegetationTile(i, j, fr.vegetationlevel);
-		}
-	}
-
-	for(unsigned int t = 1; t <= MAX_NUM_TEAMS; t++) {
-		TeamData* td = mData.getTeam(TeamID(t));
-		assert(td);
-		if(td) {
-			for(unsigned int s = 0; s < MAX_TEAM_SOLDIERS; s++) {
-				SoldierID sid = td->soldiers[s];
-				if(sid.id) {
-					SoldierData* sd = mData.getSoldier(sid);
-					assert(sd);
-					if(sd) {
-						const Position& p = sd->position;
-						if(sd->health.value > 0 &&
-								p.x >= minx && p.x < maxx &&
-								p.y >= miny && p.y < maxy) {
-							drawSoldierTile(p.x, p.y, sd->direction, td->id);
-						}
-					}
-				}
-			}
-		}
-	}
-
-	for(unsigned int j = miny; j < maxy; j++) {
-		for(unsigned int i = minx; i < maxx; i++) {
-			auto fr = map->getPoint(i, j);
-			drawVegetationTile(i, j, fr.vegetationlevel);
-		}
-	}
-
-	{
-		float htw = mTileWidth * 0.5f;
-		Position opos(UINT_MAX, 0);
-		for(auto& p : mPathLine) {
-			if(opos.x != UINT_MAX) {
-				Vector2 p1(tileToScreenCoord(opos));
-				Vector2 p2(tileToScreenCoord(p));
-				SDL_utils::drawLine(Vector3(p1.x + htw,
-							p1.y + htw,
-							0.0f),
-						Vector3(p2.x + htw,
-							p2.y + htw,
-							0.0f),
-						Color::White, 1.0f);
-			}
-			opos = p;
-		}
-	}
+	mDrawer.centerCamera();
 }
 
 bool Driver::handleKeyDown(float frameTime, SDLKey key)
@@ -289,7 +419,7 @@ bool Driver::handleMousePress(float frameTime, Uint8 button)
 		if(mGameOver)
 			return false;
 
-		auto tgtpos = getMousePosition();
+		auto tgtpos = mDrawer.getMousePosition();
 		const MapData* map = mData.getMapData();
 		if(tgtpos.x < map->getWidth() &&
 				tgtpos.y < map->getHeight()) {
@@ -318,56 +448,6 @@ bool Driver::handleMousePress(float frameTime, Uint8 button)
 	return false;
 }
 
-Common::Position Driver::getMousePosition() const
-{
-	int xp, yp;
-	float x, y;
-	SDL_GetMouseState(&xp, &yp);
-
-	x = xp / mTileWidth + mCamera.x - (getScreenWidth() / (2.0f * mTileWidth));
-	y = 1.0f + yp / mTileWidth + mCamera.y - (getScreenHeight() / (2.0f * mTileWidth));
-
-	return Position(x, y);
-}
-
-void Driver::drawGrassTile(unsigned int x, unsigned int y, GrassLevel l)
-{
-	drawTile(x, y, getTexCoord((unsigned int)l), mGrassTexture);
-}
-
-void Driver::drawSoldierTile(unsigned int x, unsigned int y, Common::Direction l, TeamID tid)
-{
-	drawTile(x, y, getTexCoord((unsigned int)l), mSoldierTextures[tid.id == 1 ? 0 : 1]);
-}
-
-void Driver::drawVegetationTile(unsigned int x, unsigned int y, Common::VegetationLevel l)
-{
-	drawTile(x, y, getTexCoord((unsigned int)l), mVegetationTexture);
-}
-
-::Common::Rectangle Driver::getTexCoord(unsigned int i) const
-{
-	Rectangle tex(0.00f, 0.25f, 0.25f, -0.25f);
-	tex.x += (i % 4) * 0.25f;
-	tex.y += (i / 4) * 0.25f;
-	return tex;
-}
-
-::Common::Vector2 Driver::tileToScreenCoord(const Common::Position& p)
-{
-	return Vector2(mTileWidth * (p.x - mCamera.x) + getScreenWidth() * 0.5f,
-			mTileWidth * (mCamera.y - p.y) + getScreenHeight() * 0.5f);
-}
-
-void Driver::drawTile(unsigned int x, unsigned int y,
-		const ::Common::Rectangle& texcoord,
-		const ::Common::Texture* t)
-{
-	auto s = tileToScreenCoord(Position(x, y));
-	SDL_utils::drawSprite(*t, Rectangle(s.x, s.y,
-				mTileWidth, mTileWidth), texcoord, 0.0f);
-}
-
 bool Driver::handleKey(float frameTime, SDLKey key, bool pressed)
 {
 	static const float camSpeed = 5.0f;
@@ -387,39 +467,9 @@ bool Driver::handleKey(float frameTime, SDLKey key, bool pressed)
 	return false;
 }
 
-::Common::Color Driver::mapSideColor(bool first, const ::Common::Color& c)
-{
-	if(c.g >= 128 && c.r == 0 && c.b == 0) {
-		Color ret(c);
-		if(first) {
-			ret.r = c.g;
-		} else {
-			ret.b = c.g;
-		}
-		ret.g = 0;
-		return ret;
-	} else {
-		return c;
-	}
-}
-
 void Driver::updateCurrentSoldier()
 {
 	mData.syncCurrentSoldier(mWorld);
-}
-
-void Driver::tryCenterCamera()
-{
-	const SoldierData& sd = mData.getCurrentSoldier();
-	const Position& p = sd.position;
-	Position tl, br;
-	getVisibleMapCoordinates(tl, br);
-	const int border = 3;
-	if(p.x < tl.x + border || p.x > br.x - border ||
-			p.y < tl.y + border || p.y > br.y - border) {
-		mCamera.x = p.x;
-		mCamera.y = p.y;
-	}
 }
 
 }

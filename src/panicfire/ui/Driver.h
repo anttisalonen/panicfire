@@ -7,6 +7,7 @@
 #include "common/Vector2.h"
 #include "common/Texture.h"
 #include "common/DriverFramework.h"
+#include "common/FontConfig.h"
 
 #include "panicfire/common/Structures.h"
 
@@ -96,6 +97,9 @@ class Drawer {
 		const Common::WorldData* mWorldData;
 		float mScreenWidth;
 		float mScreenHeight;
+
+		::Common::TextMap mTextMap;
+		TTF_Font* mFont;
 
 		std::map<Common::SoldierID, SoldierAnimation> mSoldierAnimation;
 		std::list<BulletAnimation> mBulletAnimation;

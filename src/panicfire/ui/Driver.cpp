@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sstream>
 
 #include "common/Math.h"
 #include "common/Rectangle.h"
@@ -90,6 +91,12 @@ Drawer::Drawer()
 		SDLSurface surf(soldsurf);
 		surf.mapPixelColor( [&] (const Color& c) { return mapSideColor(i == 0, c); } );
 		mSoldierTextures[i] = new Texture(surf, 0, 0);
+	}
+
+	mFont = TTF_OpenFont("share/DejaVuSans.ttf", 12);
+	if(!mFont) {
+		fprintf(stderr, "Could not open font: %s\n", TTF_GetError());
+		throw std::runtime_error("Loading font");
 	}
 }
 
@@ -351,6 +358,15 @@ void Drawer::drawFrame()
 	for(auto& b : mBulletAnimation) {
 		drawBullet(b.getPosition());
 	}
+
+	std::stringstream ss;
+	auto aps = mWorldData->getCurrentSoldier().aps.value;
+	ss << aps << " AP";
+	if(aps != 1)
+		ss << "s";
+	SDL_utils::drawText(mTextMap, mFont, Vector3(mCamera.x, mCamera.y, 0.0f), mCameraZoom, mScreenWidth, mScreenHeight,
+			10, 10, FontConfig(ss.str().c_str(), Color::White, 1.0f),
+			true, false);
 }
 
 SoldierID Drawer::getAnimatedSoldier() const

@@ -378,7 +378,6 @@ bool WorldData::operator()(const Common::MovementInput& ev)
 	sd->position = ev.to;
 	sd->aps.value -= mMapData.movementCost(ev.to);
 	sd->direction = getDirection(ev.from, ev.to);
-	std::cerr << (int)sd->direction << "\n";
 	return false;
 }
 

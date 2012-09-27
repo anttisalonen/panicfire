@@ -79,6 +79,7 @@ struct Position {
 	bool operator<(const Position& oth) const;
 	bool operator==(const Position& oth) const;
 	bool operator!=(const Position& oth) const;
+	float distance(const Position& oth) const;
 };
 
 inline std::ostream& operator<<(std::ostream& out, const Position& p)
@@ -214,6 +215,7 @@ class MapData {
 		unsigned int getHeight() const;
 		static unsigned int movementCost(GrassLevel g);
 		unsigned int movementCost(const Position& p) const;
+		bool positionBlocked(const Position& p) const;
 
 	private:
 		unsigned int width = 0;
@@ -380,6 +382,7 @@ class WorldData : public boost::static_visitor<bool> {
 
 	private:
 		static Direction getDirection(const Position& from, const Position& to);
+		void generateSoldierPositions();
 		MapData mMapData;
 		std::array<TeamData, MAX_NUM_TEAMS> mTeamData;
 		std::array<SoldierData, MAX_NUM_TEAMS * MAX_TEAM_SOLDIERS> mSoldierData;

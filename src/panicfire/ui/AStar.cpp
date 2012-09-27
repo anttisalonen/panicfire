@@ -76,8 +76,7 @@ std::set<Common::Position> AStar::graphFunc(const std::set<Common::Position>& bl
 void AStar::maybeInsert(std::set<Common::Position>& s, const std::set<Common::Position>& blocked,
 		const Common::Position& p) const
 {
-	auto fr = mMapData->getPoint(p.x, p.y);
-	if(!fr.wall && fr.vegetationlevel == Common::VegetationLevel::None) {
+	if(!mMapData->positionBlocked(p)) {
 		if(blocked.find(p) == blocked.end()) {
 			s.insert(p);
 		}

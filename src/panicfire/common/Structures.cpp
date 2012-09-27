@@ -12,6 +12,13 @@ namespace PanicFire {
 
 namespace Common {
 
+float Position::distance(const Position& oth) const
+{
+	int xd = oth.x - x;
+	int yd = oth.y - y;
+	return sqrt(xd * xd + yd * yd);
+}
+
 void MapData::generate(unsigned int w, unsigned int h)
 {
 	width = w;
@@ -66,8 +73,14 @@ unsigned int MapData::movementCost(GrassLevel g)
 
 unsigned int MapData::movementCost(const Position& p) const
 {
-	auto f = getPoint(p.x, p.y);
+	auto& f = getPoint(p.x, p.y);
 	return MapData::movementCost(f.grasslevel);
+}
+
+bool MapData::positionBlocked(const Position& p) const
+{
+	auto& f = getPoint(p.x, p.y);
+	return f.wall || f.vegetationlevel != VegetationLevel::None;
 }
 
 WorldData::WorldData()
@@ -102,6 +115,9 @@ WorldData::WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers)
 			sid++;
 		}
 	}
+
+	generateSoldierPositions();
+
 	mCurrentTeamID = 1;
 	for(auto &s : mCurrentSoldierIDIndex)
 		s = 0;
@@ -436,6 +452,10 @@ bool WorldData::movementAllowed(const MovementInput& i) const
 		return false;
 	}
 
+	if(mMapData.positionBlocked(i.to)) {
+		return false;
+	}
+
 	if(!(abs(sd->position.x - i.to.x) <= 1 && abs(sd->position.y - i.to.y) <= 1)) {
 		return false;
 	}
@@ -552,6 +572,60 @@ Direction WorldData::getDirection(const Position& from, const Position& to)
 			return Direction::W;
 		else
 			return Direction::NW;
+	}
+}
+
+void WorldData::generateSoldierPositions()
+{
+	for(unsigned int i = 0; i < MAX_NUM_TEAMS; i++) {
+		std::array<Position, MAX_TEAM_SOLDIERS> positions;
+		for(unsigned int j = 0; j < MAX_TEAM_SOLDIERS; j++) {
+			auto sd = getSoldier(mTeamData[i].soldiers[j]);
+			assert(sd);
+			Position p;
+			int tries = 0;
+			while(1) {
+				tries++;
+				if(tries > 100) {
+					throw std::runtime_error("Unable to find position for soldier");
+				}
+				p.x = ::Common::Random::uniform(0, mMapData.getWidth());
+				p.y = ::Common::Random::uniform(0, mMapData.getHeight());
+				if(mMapData.positionBlocked(p)) {
+					std::cout << p << " blocked\n";
+					continue;
+				}
+				bool alreadyused = false;
+
+				for(unsigned int l = 0; l < j; l++) {
+					if(p.distance(positions[l]) < 5.0f) {
+						alreadyused = true;
+						std::cout << p << " used in own team\n";
+						break;
+					}
+				}
+				if(alreadyused)
+					continue;
+
+				for(unsigned int k = 0; k < i; k++) {
+					for(unsigned int l = 0; l < MAX_TEAM_SOLDIERS; l++) {
+						auto sd2 = getSoldier(mTeamData[k].soldiers[l]);
+						assert(sd2);
+						if(p.distance(sd2->position) < 5.0f) {
+							alreadyused = true;
+							std::cout << p << " used in opponent team\n";
+							break;
+						}
+					}
+				}
+				if(alreadyused)
+					continue;
+				break;
+			}
+			sd->position = p;
+			positions[j] = p;
+			std::cout << sd->id << " at " << p << "\n";
+		}
 	}
 }
 

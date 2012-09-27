@@ -18,16 +18,29 @@ namespace PanicFire {
 
 namespace UI {
 
-struct SoldierAnimation {
+class Animation {
+	public:
+		Animation(const Common::Position& start, float s);
+		virtual ~Animation() { }
+		::Common::Vector2 getPosition() const;
+		void addPosition(const Common::Position& p);
+		void advance(float p);
+		bool finished() const;
+	protected:
+		std::list<Common::Position> path;
+		float speed;
+		float pos;
+};
+
+struct SoldierAnimation : public Animation {
 	SoldierAnimation(Common::SoldierID i, const Common::Position& start, float s);
-	::Common::Vector2 getPosition() const;
-	void addPosition(const Common::Position& p);
-	void advance(float p);
 
 	Common::SoldierID id;
-	std::list<Common::Position> path;
-	float speed;
-	float pos;
+};
+
+struct BulletAnimation : public Animation {
+	BulletAnimation(const Common::Position& f, const Common::Position& t, float s);
+	Common::Position target;
 };
 
 class Drawer {
@@ -47,9 +60,9 @@ class Drawer {
 		void advanceAnimation(float ft);
 		void addSoldierAnimation(Common::SoldierID i, const Common::Position& from,
 				const Common::Position& to);
-		bool isSoldierAnimated(Common::SoldierID i) const;
-		bool isAnySoldierAnimated() const;
+		bool isAnimationRunning() const;
 		Common::SoldierID getAnimatedSoldier() const;
+		void addBulletAnimation(const Common::Position& from, const Common::Position& to);
 
 	private:
 		void drawGrassTile(unsigned int x, unsigned int y, Common::GrassLevel l);
@@ -59,6 +72,7 @@ class Drawer {
 				Common::TeamID tid);
 		void drawSoldierTile(const Common::Position& p, Common::Direction l,
 				Common::TeamID tid);
+		void drawBullet(const ::Common::Vector2& p);
 		static ::Common::Rectangle getTexCoord(unsigned int i);
 		void drawTile(const ::Common::Vector2& p,
 				const ::Common::Rectangle& texcoord,
@@ -84,6 +98,7 @@ class Drawer {
 		float mScreenHeight;
 
 		std::map<Common::SoldierID, SoldierAnimation> mSoldierAnimation;
+		std::list<BulletAnimation> mBulletAnimation;
 };
 
 class Driver : public ::Common::Driver, public boost::static_visitor<> {

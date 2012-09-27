@@ -14,15 +14,19 @@ namespace PanicFire {
 
 namespace UI {
 
-SoldierAnimation::SoldierAnimation(SoldierID i, const Common::Position& start, float s)
-	: id(i),
-	speed(s),
+Animation::Animation(const Common::Position& start, float s)
+	: speed(s),
 	pos(0.0f)
 {
 	addPosition(start);
 }
 
-::Common::Vector2 SoldierAnimation::getPosition() const
+bool Animation::finished() const
+{
+	return path.size() < 2;
+}
+
+::Common::Vector2 Animation::getPosition() const
 {
 	if(path.empty())
 		return Vector2(0, 0);
@@ -41,18 +45,31 @@ SoldierAnimation::SoldierAnimation(SoldierID i, const Common::Position& start, f
 	return r;
 }
 
-void SoldierAnimation::addPosition(const Common::Position& p)
+void Animation::addPosition(const Common::Position& p)
 {
 	path.push_back(p);
 }
 
-void SoldierAnimation::advance(float p)
+void Animation::advance(float p)
 {
 	pos += p * speed;
 	while(pos > 1.0f && !path.empty()) {
 		path.pop_front();
 		pos -= 1.0f;
 	}
+}
+
+SoldierAnimation::SoldierAnimation(SoldierID i, const Common::Position& start, float s)
+	: Animation(start, s),
+	id(i)
+{
+}
+
+BulletAnimation::BulletAnimation(const Common::Position& f, const Common::Position& t, float s)
+	: Animation(f, s),
+	target(t)
+{
+	addPosition(t);
 }
 
 Drawer::Drawer()
@@ -116,11 +133,21 @@ void Drawer::advanceAnimation(float ft)
 	for(std::map<SoldierID, SoldierAnimation>::iterator ait = mSoldierAnimation.begin();
 			ait != mSoldierAnimation.end(); ) {
 		ait->second.advance(ft);
-		if(ait->second.path.size() < 2) {
+		if(ait->second.finished()) {
 			ait = mSoldierAnimation.erase(ait);
-			if(mSoldierAnimation.empty()) {
+			if(mSoldierAnimation.empty() && mBulletAnimation.empty()) {
 				centerCamera();
 			}
+		} else {
+			++ait;
+		}
+	}
+
+	for(std::list<BulletAnimation>::iterator ait = mBulletAnimation.begin();
+			ait != mBulletAnimation.end(); ) {
+		ait->advance(ft);
+		if(ait->finished()) {
+			ait = mBulletAnimation.erase(ait);
 		} else {
 			++ait;
 		}
@@ -140,14 +167,14 @@ void Drawer::addSoldierAnimation(SoldierID i, const Common::Position& from,
 	}
 }
 
-bool Drawer::isSoldierAnimated(SoldierID i) const
+void Drawer::addBulletAnimation(const Common::Position& from, const Common::Position& to)
 {
-	return mSoldierAnimation.find(i) != mSoldierAnimation.end();
+	mBulletAnimation.push_back(BulletAnimation(from, to, 4.0f));
 }
 
-bool Drawer::isAnySoldierAnimated() const
+bool Drawer::isAnimationRunning() const
 {
-	return !mSoldierAnimation.empty();
+	return !mSoldierAnimation.empty() || !mBulletAnimation.empty();
 }
 
 void Drawer::drawSoldierAnimation(const SoldierAnimation& a)
@@ -217,6 +244,13 @@ void Drawer::drawLine(const Common::Position& p1, const Common::Position& p2)
 			Color::White, 1.0f);
 }
 
+void Drawer::drawBullet(const ::Common::Vector2& p)
+{
+	Vector2 b(p.x + 0.5f, p.y - 0.5f);
+	auto s = tileToScreenCoord(b);
+	SDL_utils::drawPoint(Vector3(s.x, s.y, 0.0), mTileWidth * 0.1f, Color::White);
+}
+
 void Drawer::drawTile(const ::Common::Vector2& p,
 		const ::Common::Rectangle& texcoord,
 		const ::Common::Texture* t)
@@ -279,7 +313,16 @@ void Drawer::drawFrame()
 					assert(sd);
 					if(sd) {
 						const Position& p = sd->position;
-						if(sd->health.value > 0 &&
+						bool alive = sd->health.value > 0;
+						bool bulletapproaching = false;
+						for(auto b : mBulletAnimation) {
+							if(b.target == sd->position) {
+								bulletapproaching = true;
+								break;
+							}
+						}
+
+						if((alive || bulletapproaching) &&
 								p.x >= minx && p.x < maxx &&
 								p.y >= miny && p.y < maxy) {
 							auto ait = mSoldierAnimation.find(sid);
@@ -303,6 +346,10 @@ void Drawer::drawFrame()
 			auto fr = map->getPoint(i, j);
 			drawVegetationTile(i, j, fr.vegetationlevel);
 		}
+	}
+
+	for(auto& b : mBulletAnimation) {
+		drawBullet(b.getPosition());
 	}
 }
 
@@ -412,7 +459,7 @@ bool Driver::prerenderUpdate(float frameTime)
 	mDrawer.addCameraZoom(mCameraZoomVelocity * frameTime);
 	mDrawer.advanceAnimation(frameTime);
 
-	if(mDrawer.isAnySoldierAnimated()) {
+	if(mDrawer.isAnimationRunning()) {
 		mDrawer.centerCamera();
 	}
 
@@ -473,7 +520,7 @@ void Driver::sendEndOfTurn()
 	if(mGameOver)
 		return;
 
-	if(mDrawer.isAnySoldierAnimated())
+	if(mDrawer.isAnimationRunning())
 		return;
 
 	bool succ = mWorld.input(FinishTurnInput());
@@ -547,6 +594,11 @@ void Driver::operator()(const Common::MovementInput& ev)
 
 void Driver::operator()(const Common::ShotInput& ev)
 {
+	auto sd = mData.getSoldier(ev.shooter);
+	if(sd) {
+		auto from = sd->position;
+		mDrawer.addBulletAnimation(from, ev.target);
+	}
 }
 
 void Driver::operator()(const Common::FinishTurnInput& ev)

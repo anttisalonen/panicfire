@@ -361,6 +361,8 @@ bool WorldData::operator()(const Common::MovementInput& ev)
 	assert(sd);
 	sd->position = ev.to;
 	sd->aps.value -= mMapData.movementCost(ev.to);
+	sd->direction = getDirection(ev.from, ev.to);
+	std::cerr << (int)sd->direction << "\n";
 	return false;
 }
 
@@ -524,6 +526,32 @@ void WorldData::syncCurrentSoldier(WorldInterface& wi)
 	if(!boost::apply_visitor(*this, qr2)) {
 		assert(0);
 		throw std::runtime_error("Soldier query failed when syncing current");
+	}
+}
+
+Direction WorldData::getDirection(const Position& from, const Position& to)
+{
+	assert(from != to);
+	assert(abs(from.x - to.x) <= 1 && abs(from.y - to.y) <= 1);
+	if(to.x > from.x) {
+		if(to.y > from.y)
+			return Direction::SE;
+		else if(to.y == from.y)
+			return Direction::E;
+		else
+			return Direction::NE;
+	} else if(to.x == from.x) {
+		if(to.y > from.y)
+			return Direction::S;
+		else
+			return Direction::N;
+	} else {
+		if(to.y > from.y)
+			return Direction::SW;
+		else if(to.y == from.y)
+			return Direction::W;
+		else
+			return Direction::NW;
 	}
 }
 

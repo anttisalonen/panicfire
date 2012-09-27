@@ -379,6 +379,7 @@ class WorldData : public boost::static_visitor<bool> {
 		static unsigned int soldierIndexFromSoldierID(SoldierID s);
 
 	private:
+		static Direction getDirection(const Position& from, const Position& to);
 		MapData mMapData;
 		std::array<TeamData, MAX_NUM_TEAMS> mTeamData;
 		std::array<SoldierData, MAX_NUM_TEAMS * MAX_TEAM_SOLDIERS> mSoldierData;

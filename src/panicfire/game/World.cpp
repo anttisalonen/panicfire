@@ -1,5 +1,7 @@
 #include <iostream>
 
+#include "common/Line.h"
+
 #include "panicfire/game/World.h"
 
 namespace PanicFire { 
@@ -106,15 +108,37 @@ Common::QueryResult World::operator()(const Common::ShotInput& i)
 		return DeniedQueryResult();
 	}
 
+	/* reduces APs */
 	bool empty = (*mData)(i);
 	assert(!empty);
 
-	/* TODO: add checking for obstacles and range */
-	for(auto& q : mEventQueue) {
-		q.push(InputEvent(i));
+	Position sp = i.target;
+	{
+		auto sd = mData->getSoldier(i.shooter);
+		assert(sd);
+		auto l = ::Common::Line::line(::Common::Point2(sd->position.x, sd->position.y),
+				::Common::Point2(i.target.x, i.target.y));
+		assert(l.size() >= 2);
+		l.pop_front(); // shooter position
+		l.pop_front(); // first position next to shooter
+		const auto mapdata = mData->getMapData();
+		for(auto& p : l) {
+			Position pp(p.x, p.y);
+			if(mapdata->positionBlocked(pp) || mData->getSoldierAt(pp)) {
+				sp = pp;
+				break;
+			}
+		}
 	}
 
-	auto tgtsoldier = mData->getSoldierAt(i.target);
+	ShotInput ii(i.shooter, sp);
+
+	/* TODO: add checking for obstacles and range */
+	for(auto& q : mEventQueue) {
+		q.push(InputEvent(ii));
+	}
+
+	auto tgtsoldier = mData->getSoldierAt(ii.target);
 	if(tgtsoldier) {
 		Health nh(tgtsoldier->health);
 		nh -= Health(40);

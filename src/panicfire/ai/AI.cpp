@@ -4,6 +4,7 @@
 #include "common/Rectangle.h"
 #include "common/SDL_utils.h"
 #include "common/Random.h"
+#include "common/Line.h"
 
 #include "panicfire/ai/AI.h"
 
@@ -88,7 +89,8 @@ Position TeamPlan::getNextVisitPosition() const
 SoldierPlan::SoldierPlan(AIData& d, SoldierID i)
 	: mAIData(d),
 	mID(i),
-	mMoving(false)
+	mSentInput(false),
+	mShooting(false)
 {
 	mTargetPosition = mAIData.mData.getSoldier(mID)->position;
 }
@@ -97,8 +99,10 @@ void SoldierPlan::act()
 {
 	do {
 		handleEvents();
-		if(mAIData.mMyTurn)
+		if(mAIData.mMyTurn) {
+			checkShotChance();
 			sendInput();
+		}
 	} while(mAIData.mMyTurn);
 }
 
@@ -117,25 +121,35 @@ void SoldierPlan::setupPath()
 void SoldierPlan::sendInput()
 {
 	auto sd = mAIData.mData.getSoldier(mID);
-	if(mPath.empty() || *mPath.begin() == sd->position) {
-		setupPath();
-		assert(!mPath.empty());
-	}
-
-	for(auto pit = mPath.begin(); pit != mPath.end(); ) {
-		if(sd->position == *pit) {
-			pit = mPath.erase(pit);
+	if(mShooting) {
+		bool succ = mAIData.mWorld.input(ShotInput(mID, mShootPosition));
+		if(!succ) {
+			bool succ = mAIData.mWorld.input(FinishTurnInput());
+			assert(succ);
 		} else {
-			MovementInput i(mAIData.mData.getCurrentSoldierID(), sd->position, *pit);
-			if(mAIData.mData.movementAllowed(i)) {
-				bool succ = mAIData.mWorld.input(i);
-				assert(succ);
-				mMoving = true;
+			mSentInput = true;
+		}
+	} else {
+		if(mPath.empty() || *mPath.begin() == sd->position) {
+			setupPath();
+			assert(!mPath.empty());
+		}
+
+		for(auto pit = mPath.begin(); pit != mPath.end(); ) {
+			if(sd->position == *pit) {
+				pit = mPath.erase(pit);
 			} else {
-				bool succ = mAIData.mWorld.input(FinishTurnInput());
-				assert(succ);
+				MovementInput i(mID, sd->position, *pit);
+				if(mAIData.mData.movementAllowed(i)) {
+					bool succ = mAIData.mWorld.input(i);
+					assert(succ);
+					mSentInput = true;
+				} else {
+					bool succ = mAIData.mWorld.input(FinishTurnInput());
+					assert(succ);
+				}
+				break;
 			}
-			break;
 		}
 	}
 }
@@ -148,6 +162,43 @@ void SoldierPlan::handleEvents()
 		if(empty)
 			break;
 		boost::apply_visitor(*this, ev);
+	}
+}
+
+void SoldierPlan::checkShotChance()
+{
+	auto mysd = mAIData.mData.getSoldier(mID);
+	mShooting = false;
+
+	static_assert(MAX_NUM_TEAMS == 2, "Only two teams supported");
+	TeamID other = mAIData.mMyTeamID == TeamID(1) ? TeamID(2) : TeamID(1);
+	auto td = mAIData.mData.getTeam(other);
+	assert(td);
+	for(auto sid : td->soldiers) {
+		auto sd = mAIData.mData.getSoldier(sid);
+		if(sd && sd->alive()) {
+			auto l = Line::line(Point2(mysd->position.x, mysd->position.y),
+					Point2(sd->position.x, sd->position.y));
+			assert(l.size() >= 2);
+			l.pop_front(); // shooter position
+			l.pop_front(); // first position next to shooter
+			if(!l.empty())
+				l.pop_back(); // target location
+			const auto mapdata = mAIData.mData.getMapData();
+			bool blocked = false;
+			for(auto& p : l) {
+				Position pp(p.x, p.y);
+				if(mapdata->positionBlocked(pp) || mAIData.mData.getSoldierAt(pp)) {
+					blocked = true;
+					break;
+				}
+			}
+			if(!blocked) {
+				mShootPosition = sd->position;
+				mShooting = true;
+				break;
+			}
+		}
 	}
 }
 
@@ -176,14 +227,18 @@ void SoldierPlan::operator()(const Common::EmptyEvent& ev)
 
 void SoldierPlan::operator()(const Common::MovementInput& ev)
 {
-	if(mMoving &&
+	if(mSentInput &&
 			ev.mover == mID) {
-		mMoving = false;
+		mSentInput = false;
 	}
 }
 
 void SoldierPlan::operator()(const Common::ShotInput& ev)
 {
+	if(mSentInput &&
+			ev.shooter == mID) {
+		mSentInput = false;
+	}
 }
 
 void SoldierPlan::operator()(const Common::FinishTurnInput& ev)

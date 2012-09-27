@@ -174,14 +174,14 @@ struct SoldierData {
 	TeamID teamid;
 	Position position;
 	Health health;
-	bool active = false;
 	Direction direction;
 	APs aps;
+	bool alive() const;
 };
 
 struct TeamData {
 	TeamID id;
-	SoldierID soldiers[MAX_TEAM_SOLDIERS];
+	std::array<SoldierID, MAX_TEAM_SOLDIERS> soldiers;
 };
 
 enum class VegetationLevel {

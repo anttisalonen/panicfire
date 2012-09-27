@@ -12,6 +12,11 @@ namespace PanicFire {
 
 namespace Common {
 
+bool SoldierData::alive() const
+{
+	return id.id != 0 && health.value > 0;
+}
+
 float Position::distance(const Position& oth) const
 {
 	int xd = oth.x - x;
@@ -107,7 +112,6 @@ WorldData::WorldData(unsigned int w, unsigned int h, unsigned int nsoldiers)
 				mSoldierData[sid - 1].position.x = w - j - 1;
 			mSoldierData[sid - 1].position.y = i == 0 ? 0 : h - 1;
 			mSoldierData[sid - 1].health.value = MAX_HEALTH;
-			mSoldierData[sid - 1].active = true;
 			mSoldierData[sid - 1].direction = i == 0 ? Direction::SE : Direction::NW;
 			mSoldierData[sid - 1].aps.value = MAX_APS;
 			mTeamData[i].soldiers[j].id = sid;

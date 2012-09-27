@@ -53,11 +53,14 @@ class SoldierPlan : public boost::static_visitor<> {
 		void handleEvents();
 		void setupPath();
 		void sendInput();
+		void checkShotChance();
 
 		AIData& mAIData;
 		Common::SoldierID mID;
-		bool mMoving;
+		bool mSentInput;
 		Common::Position mTargetPosition;
+		Common::Position mShootPosition;
+		bool mShooting;
 		std::list<Common::Position> mPath;
 };
 

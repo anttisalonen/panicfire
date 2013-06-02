@@ -16,7 +16,7 @@ namespace PanicFire {
 
 namespace AI {
 
-class AIData;
+struct AIData;
 
 class TeamPlan {
 	public:
